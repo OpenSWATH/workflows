@@ -1,0 +1,64 @@
+run_ids, = glob_wildcards("../data_dia/{run}.mzXML")
+
+rule all:
+    input:
+        expand("../results/pyprophet/integrated/{run}.osw", run=run_ids)
+
+rule openswath:
+    input:
+        "../data_dia/{run}.mzXML"
+    output:
+        "../results/openswath/{run}.osw",
+    threads: 4
+    resources:
+        mem_mb=lambda wildcards, attempt: attempt * 8192
+    shell:
+        "OpenSwathWorkflow -in {input} -tr ../data_library/library.pqp -tr_irt ../data_library/cirtkit.TraML -out_osw {output} -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 50 -ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:NrRTBins 10 -RTNormalization:MinBinsFilled 3 -Scoring:stop_report_after_feature 5 -threads {threads}" # -use_ms1_traces -enable_uis_scoring -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -Scoring:Scores:use_total_mi_score
+
+rule pyprophet_model:
+    input:
+        expand("../results/openswath/{run}.osw", run=run_ids)
+    params:
+        subsample_ratio = lambda wildcards, input: round(1.0/len(input),3)
+    output:
+        "../results/pyprophet/runspecific/model.osw",
+    shell:
+        "pyprophet merge --subsample_ratio={params.subsample_ratio} --out {output} {input} && "
+        "pyprophet score --in {output} --level=ms2"
+        # "pyprophet score --in {output} --level=ms1 && "
+        # "pyprophet score --in {output} --level=transition"
+
+rule pyprophet_apply:
+    input:
+        osw = rules.openswath.output,
+        model = rules.pyprophet_model.output
+    output:
+        osw = "../results/pyprophet/runspecific/{run}.osw",
+        oswr = "../results/pyprophet/runspecific/{run}.oswr"
+    shell:
+        "pyprophet score --in {input.osw} --out {output.osw} --apply_weights {input.model} --level=ms2 && "
+        # "pyprophet score --in {output.osw} --apply_weights {input.model} --level=ms1 && "
+        # "pyprophet score --in {output.osw} --apply_weights {input.model} --level=transition && "
+        # "pyprophet ipf --no-ipf_ms1_scoring --in {output.osw} && "
+        "pyprophet reduce --in {output.osw} --out {output.oswr}"
+
+rule pyprophet_global:
+    input:
+        template = rules.pyprophet_model.output,
+        oswr = expand("../results/pyprophet/runspecific/{run}.oswr", run=run_ids)
+    output:
+        "../results/pyprophet/global/model.oswr"
+    shell:
+        "pyprophet merge --template {input.template} --out {output} {input.oswr} && "
+        "pyprophet peptide --context=global --in {output} && "
+        "pyprophet protein --context=global --in {output}"
+
+rule pyprophet_backpropagate:
+    input:
+        osw = rules.pyprophet_apply.output.osw,
+        model = rules.pyprophet_global.output
+    output:
+        osw = "../results/pyprophet/integrated/{run}.osw"
+    shell:
+        "pyprophet backpropagate --apply_scores {input.model} --in {input.osw} && "
+        "pyprophet export --in {input.osw}"

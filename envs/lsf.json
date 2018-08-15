@@ -1,0 +1,17 @@
+{
+    "__default__" :
+    {
+        "nCPUs"     : "1",
+        "memory"    : 8192,
+        "resources" : "\"rusage[mem=8192,scratch=8192]\"",
+        "name"      : "JOBNAME.{rule}.{wildcards}",
+        "output"    : "logs/cluster/{rule}.{wildcards}.out",
+        "error"     : "logs/cluster/{rule}.{wildcards}.err"
+    },
+
+
+    "openswath" :
+    {
+        "nCPUs"     : "4"
+    }
+}

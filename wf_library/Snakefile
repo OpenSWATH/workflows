@@ -1,0 +1,100 @@
+# Obtain run_ids from DDA or DIA-ps mzXML files in data folder
+run_ids, = glob_wildcards("../data_dda/{run}.mzXML")
+
+rule all:
+    input: 
+        "../data_library/library.pqp"
+
+rule philosopher:
+    output:
+        "td-library.fasta"
+    shell:
+        "rm -rf .meta && "
+        "philosopher workspace --init && "
+        "philosopher database --prefix DECOY_ --custom library.fasta && "
+        "ln *td-library.fasta td-library.fasta"
+
+rule linker:
+    input:
+        "../data_dda/{run}.mzXML"
+    output:
+        "../results/tpp/{run}.mzXML"
+    shell:
+        "ln {input} {output}"
+
+rule comet:
+    input:
+        philosopher = rules.philosopher.output,
+        mzxml = "../results/tpp/{run}.mzXML"
+    output:
+        "../results/tpp/{run}.pep.xml"
+    threads: 4
+    resources:
+        mem_mb=lambda wildcards, attempt: attempt * 8192
+    shell:
+        "philosopher comet --param comet.params {input.mzxml}"
+
+rule peptideprophet:
+    input:
+        rules.comet.output
+    output:
+        "../results/tpp/interact-{run}.pep.xml"
+    shell:
+        "philosopher peptideprophet --database td-library.fasta --accmass --decoy DECOY_ --decoyprobs --nonparam {input}"
+
+rule iprophet:
+    input:
+        expand("../results/tpp/interact-{run}.pep.xml", run=run_ids)
+    output:
+        "../results/tpp/iproph.pep.xml"
+    threads: 4
+    shell:
+        "philosopher iprophet --decoy DECOY_ --threads 4 {input}"
+
+rule spectrast_import:
+    input:
+        rules.iprophet.output
+    output:
+        "../results/tpp/rtn.splib"
+    shell:
+        "spectrast -cN../results/tpp/rtn -c_IRT../data_library/cirtkit.txt -c_IRR -cP0.9 -cq0.01 -c_RDYDECOY {input}"
+
+rule spectrast_consensus:
+    input:
+        rules.spectrast_import.output
+    output:
+        "../results/tpp/consensus.splib"
+    shell:
+        "spectrast -cN../results/tpp/consensus -cAC {input}"
+
+rule spectrast_filter:
+    input:
+        rules.spectrast_consensus.output
+    output:
+        "../results/tpp/proteotypic.mrm"
+    shell:
+        "spectrast -cN../results/tpp/proteotypic -cM -cu -cd -cD../data_library/library.fasta {input}"
+
+rule generate_assays:
+    input:
+        rules.spectrast_filter.output
+    output:
+        "../results/openswath/assays.TraML"
+    shell:
+        "OpenSwathAssayGenerator -in {input} -out {output}"
+
+rule append_decoys:
+    input:
+        rules.generate_assays.output
+    output:
+        "../results/openswath/assays_decoys.TraML"
+    shell:
+        "OpenSwathDecoyGenerator -in {input} -out {output}"
+
+rule generate_pqp:
+    input:
+        rules.append_decoys.output
+    output:
+        "../data_library/library.pqp"
+    shell:
+        "TargetedFileConverter -in {input} -out {output}"
