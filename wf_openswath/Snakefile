@@ -1,8 +1,11 @@
+# Obtain run_ids from centroided DIA mzXML files in dia_data folder
 run_ids, = glob_wildcards("../data_dia/{run}.mzXML")
 
 rule all:
     input:
         expand("../results/pyprophet/integrated/{run}.osw", run=run_ids)
+    output:
+        touch("wf_openswath.done")
 
 rule openswath:
     input:
@@ -13,7 +16,7 @@ rule openswath:
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
     shell:
-        "OpenSwathWorkflow -in {input} -tr ../data_library/library.pqp -tr_irt ../data_library/cirtkit.TraML -out_osw {output} -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 50 -ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:NrRTBins 10 -RTNormalization:MinBinsFilled 3 -Scoring:stop_report_after_feature 5 -threads {threads}" # -use_ms1_traces -enable_uis_scoring -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -Scoring:Scores:use_total_mi_score
+        "OpenSwathWorkflow -in {input} -tr ../data_library/library.pqp -tr_irt ../data_library/cirtkit.TraML -out_osw {output} -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 50 -ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -Scoring:stop_report_after_feature 5 -threads {threads}" # -use_ms1_traces -enable_uis_scoring -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -Scoring:Scores:use_total_mi_score
 
 rule pyprophet_model:
     input:
@@ -58,7 +61,7 @@ rule pyprophet_backpropagate:
         osw = rules.pyprophet_apply.output.osw,
         model = rules.pyprophet_global.output
     output:
-        osw = "../results/pyprophet/integrated/{run}.osw"
+        "../results/pyprophet/integrated/{run}.osw"
     shell:
-        "pyprophet backpropagate --apply_scores {input.model} --in {input.osw} && "
-        "pyprophet export --in {input.osw}"
+        "pyprophet backpropagate --apply_scores {input.model} --in {input.osw}  --out {output} && "
+        "pyprophet export --in {output}"
