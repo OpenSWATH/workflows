@@ -34,14 +34,14 @@ rule peptideprophet:
     output:
         "../results/library/interact-{run}.pepXML"
     shell:
-        "InteractParser {output} {input.pepxml} -D{input.fasta} && PeptideProphetParser {output} ACCMASS NONPARAM DECOY=DECOY_"
+        "InteractParser {output} {input.pepxml} -D{input.fasta} && PeptideProphetParser {output} ACCMASS NONPARAM PPM DECOY=DECOY_"
 
 rule iprophet:
     input:
-        expand("../results/library/interact-{run}.pepXML", run=run_ids)
+        "../results/library/interact-{run}.pepXML"
     output:
-        "../results/library/iprophet.pepXML"
-    threads: 4
+        "../results/library/iprophet-{run}.pepXML"
+    threads: 1
     shell:
         "InterProphetParser DECOY=DECOY_ THREADS={threads} {input} {output}"
 
@@ -49,17 +49,18 @@ rule spectrast_import:
     input:
         rules.iprophet.output
     output:
-        "../results/library/rtn.splib"
+        name = temp(touch("../results/library/rtn-{run}")),
+        splib = "../results/library/rtn-{run}.splib"
     shell:
-        "spectrast -cN../results/library/rtn -c_IRT../data_library/cirtkit.txt -c_IRR -cq0.01 -c_RDYDECOY {input}"
+        "spectrast -cN{output.name} -c_IRT../data_library/cirtkit.txt -c_IRR -cq0.01 -c_RDYDECOY {input}"
 
 rule spectrast_consensus:
     input:
-        rules.spectrast_import.output
+        expand("../results/library/rtn-{run}.splib", run=run_ids)
     output:
         "../results/library/consensus.splib"
     shell:
-        "spectrast -cQ20 -cN../results/library/consensus -cAC {input}"
+        "spectrast -cN../results/library/consensus -cAC -cJU {input}"
 
 rule spectrast_filter:
     input:
@@ -68,13 +69,13 @@ rule spectrast_filter:
     output:
         "../results/library/proteotypic.mrm"
     shell:
-        "spectrast -cN../results/library/proteotypic -cM -cu -cd -cD{input.fasta} {input.splib}"
+        "spectrast -cQ20 -cN../results/library/proteotypic -cM -cu -cd -cD{input.fasta} {input.splib}"
 
 rule generate_swath_assays:
     input:
         rules.spectrast_filter.output
     output:
-        temp("../results/openswath/assays.TraML")
+        temp("../results/library/assays.TraML")
     shell:
         "OpenSwathAssayGenerator -in {input} -out {output}"
 
@@ -82,7 +83,7 @@ rule generate_swath_decoys:
     input:
         rules.generate_swath_assays.output
     output:
-        "../results/openswath/assays_decoys.TraML"
+        temp("../results/library/assays_decoys.TraML")
     shell:
         "OpenSwathDecoyGenerator -in {input} -out {output}"
 
