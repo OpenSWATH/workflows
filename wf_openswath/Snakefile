@@ -7,16 +7,54 @@ rule all:
     output:
         touch("wf_openswath.done")
 
+rule irt_spectrast_consensus:
+    input:
+        "../results/library/rtn-{run}_Q1.splib"
+    output:
+        name = touch("../results/openswath/irt_{run}/consensus"),
+        splib = "../results/openswath/irt_{run}/consensus.splib"
+    shell:
+        "spectrast -cQ20 -cN{output.name} -cAC {input}"
+
+rule irt_spectrast_filter:
+    input:
+        fasta = "../data_library/library.fasta",
+        splib = rules.irt_spectrast_consensus.output.splib
+    output:
+        name = touch("../results/openswath/irt_{run}/proteotypic"),
+        mrm = "../results/openswath/irt_{run}/proteotypic.mrm"
+    shell:
+        "spectrast -cN{output.name} -cM -cu -cd -cD{input.fasta} {input.splib}"
+
+rule irt_generate_swath_assays:
+    input:
+        rules.irt_spectrast_filter.output.mrm
+    output:
+        "../results/openswath/irt_{run}/assays.pqp"
+    shell:
+        "OpenSwathAssayGenerator -in {input} -out {output}"
+
+rule irt_filter_swath_assays:
+    input:
+        rules.irt_generate_swath_assays.output
+    output:
+        "../results/openswath/irt_{run}.pqp"
+    script:
+        "scripts/hrirt.R"
+
 rule openswath:
     input:
-        "../data_dia/{run}.mzXML"
+        irt_linear="../data_library/irtkit.TraML",
+        irt_nonlinear=rules.irt_filter_swath_assays.output,
+        mzxml="../data_dia/{run}.mzXML",
     output:
-        "../results/openswath/{run}.osw",
+        osw="../results/openswath/{run}.osw",
+        cache=temp(directory("/tmp/{run}/"))
     threads: 4
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
     shell:
-        "OpenSwathWorkflow -in {input} -tr ../data_library/library.pqp -tr_irt ../data_library/cirtkit.TraML -out_osw {output} -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 50 -ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -Scoring:stop_report_after_feature 5 -threads {threads}" # -use_ms1_traces -enable_uis_scoring -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -Scoring:Scores:use_total_mi_score
+        "OpenSwathWorkflow -in {input.mzxml} -tr ../data_library/library.pqp -tr_irt {input.irt_linear} -tr_irt_nonlinear {input.irt_nonlinear} -out_osw {output.osw} -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory {output.cache} -batchSize 1000 -ms1_isotopes 3 -Scoring:max_transitions 6 -Scoring:min_transitions 3 -Scoring:max_ms1_isotopes 4 -Scoring:min_ms1_isotopes 2" # -enable_uis_scoring
 
 rule pyprophet_model:
     input:
@@ -27,19 +65,19 @@ rule pyprophet_model:
         "../results/pyprophet/runspecific/model.osw",
     shell:
         "pyprophet merge --subsample_ratio={params.subsample_ratio} --out {output} {input} && "
-        "pyprophet score --in {output} --level=ms2"
+        "pyprophet score --in {output} --level=ms1ms2"
         # "pyprophet score --in {output} --level=ms1 && "
         # "pyprophet score --in {output} --level=transition"
 
 rule pyprophet_apply:
     input:
-        osw = rules.openswath.output,
+        osw = rules.openswath.output.osw,
         model = rules.pyprophet_model.output
     output:
         osw = "../results/pyprophet/runspecific/{run}.osw",
         oswr = "../results/pyprophet/runspecific/{run}.oswr"
     shell:
-        "pyprophet score --in {input.osw} --out {output.osw} --apply_weights {input.model} --level=ms2 && "
+        "pyprophet score --in {input.osw} --out {output.osw} --apply_weights {input.model} --level=ms1ms2 && "
         # "pyprophet score --in {output.osw} --apply_weights {input.model} --level=ms1 && "
         # "pyprophet score --in {output.osw} --apply_weights {input.model} --level=transition && "
         # "pyprophet ipf --no-ipf_ms1_scoring --in {output.osw} && "
