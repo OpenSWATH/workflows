@@ -4,8 +4,6 @@ run_ids, = glob_wildcards("../data_dia/{run}.mzXML")
 rule all:
     input:
         expand("../results/pyprophet/integrated/{run}.osw", run=run_ids)
-    output:
-        touch("wf_openswath.done")
 
 rule irt_spectrast_consensus:
     input:

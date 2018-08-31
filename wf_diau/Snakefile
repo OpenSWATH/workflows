@@ -7,8 +7,6 @@ qual_ids = ["Q1","Q2","Q3"]
 rule all:
     input:
         expand("../results/library/{run}_{qual}.mzXML", run=run_ids, qual=qual_ids)
-    output:
-        touch("wf_diau.done")
 
 rule diau:
     input:

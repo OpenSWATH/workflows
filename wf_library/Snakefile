@@ -2,10 +2,9 @@
 run_ids, = glob_wildcards("../results/library/{run}.mzXML")
 
 rule all:
-    input: 
-        "../data_library/library.pqp"
-    output:
-        touch("wf_library.done")
+    input:
+        runlib = expand("../results/library/rtn-{run}.splib", run=run_ids),
+        library = "../data_library/library.pqp"
 
 rule decoydb:
     input:
