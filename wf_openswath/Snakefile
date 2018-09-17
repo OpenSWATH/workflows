@@ -3,7 +3,7 @@ run_ids, = glob_wildcards("../data_dia/{run}.mzXML")
 
 rule all:
     input:
-        expand("../results/pyprophet/integrated/{run}.osw", run=run_ids)
+        "tric_feature_alignment.done"
 
 rule irt_spectrast_consensus:
     input:
@@ -35,15 +35,29 @@ rule irt_generate_swath_assays:
 rule irt_filter_swath_assays:
     input:
         rules.irt_generate_swath_assays.output
+    params:
+        bins = 10,
+        peptides = 5
     output:
         "../results/openswath/irt_{run}.pqp"
     script:
         "scripts/hrirt.R"
 
+rule irt_nonlinear_filter_swath_assays:
+    input:
+        rules.irt_generate_swath_assays.output
+    params:
+        bins = 1000,
+        peptides = 5
+    output:
+        "../results/openswath/irt_nonlinear_{run}.pqp"
+    script:
+        "scripts/hrirt.R"
+
 rule openswath:
     input:
-        irt_linear="../data_library/irtkit.TraML",
-        irt_nonlinear=rules.irt_filter_swath_assays.output,
+        irt_linear=rules.irt_filter_swath_assays.output,
+        irt_nonlinear=rules.irt_nonlinear_filter_swath_assays.output,
         mzxml="../data_dia/{run}.mzXML",
     output:
         osw="../results/openswath/{run}.osw",
@@ -101,3 +115,22 @@ rule pyprophet_backpropagate:
     shell:
         "pyprophet backpropagate --apply_scores {input.model} --in {input.osw}  --out {output} && "
         "pyprophet export --in {output}"
+
+rule tric_prepare:
+    input:
+        rules.pyprophet_backpropagate.output
+    output:
+        "../results/tric/{run}.mzXML.tsv"
+    shell:
+        "pyprophet export --in={input} && mv $(basename {output}) {output}"
+
+rule tric_feature_alignment:
+    input:
+        expand("../results/tric/{run}.mzXML.tsv", run=run_ids)
+    output:
+        long="../results/tric/feature_alignment.tsv",
+        matrix="../results/tric/feature_alignment_matrix.tsv",
+        check=temp(touch("tric_feature_alignment.done"))
+    shell:
+        "feature_alignment.py --in {input} --out {output.long} --out_matrix {output.matrix} --method LocalMST --realign_method lowess_cython --max_rt_diff 60 --mst:useRTCorrection True --mst:Stdev_multiplier 3.0 --target_fdr 0.01 --max_fdr_quality 0.05"
+

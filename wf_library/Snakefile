@@ -44,14 +44,26 @@ rule iprophet:
     shell:
         "InterProphetParser DECOY=DECOY_ THREADS={threads} {input} {output}"
 
+rule hrirt:
+    input:
+        expand("../results/library/iprophet-{run}.pepXML", run=run_ids)
+    output:
+        temp(touch("calibrated.iRT"))
+    threads: 1
+    script:
+        "scripts/hrirt.py"
+
 rule spectrast_import:
     input:
-        rules.iprophet.output
+        pepxml = rules.iprophet.output,
+        irt = rules.hrirt.output
+    params:
+        irt = "../results/library/iprophet-{run}.iRT"
     output:
         name = temp(touch("../results/library/rtn-{run}")),
         splib = "../results/library/rtn-{run}.splib"
     shell:
-        "spectrast -cN{output.name} -c_IRT../data_library/cirtkit.txt -c_IRR -cq0.01 -c_RDYDECOY {input}"
+        "spectrast -cN{output.name} -c_IRT{params.irt} -c_IRR! -cq0.01 -c_RDYDECOY {input.pepxml}"
 
 rule spectrast_consensus:
     input:

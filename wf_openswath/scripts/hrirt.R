@@ -9,9 +9,9 @@ file.copy(input_pqp, output_pqp, overwrite=TRUE)
 pqp <- dbConnect(RSQLite::SQLite(), output_pqp)
 anchor_candidates<-dbGetQuery(pqp, 'SELECT PRECURSOR.ID AS PRECURSOR_ID, LIBRARY_RT FROM PRECURSOR WHERE PRECURSOR.DECOY == 0;')
 
-anchor_candidates$BIN<-cut(anchor_candidates$LIBRARY_RT, 1000, labels=FALSE)
+anchor_candidates$BIN<-cut(anchor_candidates$LIBRARY_RT, snakemake@params[["bins"]], labels=FALSE)
 
-anchors<-ddply(anchor_candidates,.(BIN),function(X){return(head(X,5))})
+anchors<-ddply(anchor_candidates,.(BIN),function(X){return(head(X,snakemake@params[["peptides"]]))})
 
 dbWriteTable(pqp, "temp_anchors", anchors[,c("PRECURSOR_ID","LIBRARY_RT")]) # d now in mem database
 
