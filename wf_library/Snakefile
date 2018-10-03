@@ -1,5 +1,5 @@
 # Obtain run_ids from DDA or DIA-ps mzXML files in data folder
-run_ids, = glob_wildcards("../results/library/{run}.mzXML")
+run_ids, = glob_wildcards("../data_dda/{run}.mzXML")
 
 rule all:
     input:
@@ -14,10 +14,18 @@ rule decoydb:
     shell:
         "DecoyDatabase -in {input} -out {output}"
 
+rule spectra:
+    input:
+        "../data_dda/{run}.mzXML"
+    output:
+        "../results/library/{run}.mzXML"
+    shell:
+        "ln {input} {output}"
+
 rule msfragger:
     input:
         fasta = rules.decoydb.output,
-        mzxml = "../results/library/{run}.mzXML"
+        mzxml = rules.spectra.output
     output:
         "../results/library/{run}.pepXML"
     threads: 4
@@ -44,14 +52,27 @@ rule iprophet:
     shell:
         "InterProphetParser DECOY=DECOY_ THREADS={threads} {input} {output}"
 
-rule hrirt:
+rule spectra_convert:
     input:
-        expand("../results/library/iprophet-{run}.pepXML", run=run_ids)
+        "../results/library/{run}.mzXML"
+    output:
+        "../results/library/{run}.mzML"
+    shell:
+        "outdir=$(dirname {output}) && "
+        "msconvert {input} --32 -o $outdir"
+
+rule easypqp:
+    input:
+        pepxml = expand("../results/library/iprophet-{run}.pepXML", run=run_ids),
+        mzml = expand("../results/library/{run}.mzML", run=run_ids),
     output:
         temp(touch("calibrated.iRT"))
+    params:
+        library_modifications = "library_modifications.params",
+        fdr_threshold = 0.01
     threads: 1
     script:
-        "scripts/hrirt.py"
+        "scripts/easypqp.py"
 
 rule spectrast_import:
     input:

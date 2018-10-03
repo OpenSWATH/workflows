@@ -6,7 +6,7 @@ qual_ids = ["Q1","Q2","Q3"]
 
 rule all:
     input:
-        expand("../results/library/{run}_{qual}.mzXML", run=run_ids, qual=qual_ids)
+        expand("../data_dda/{run}_{qual}.mzXML", run=run_ids, qual=qual_ids)
 
 rule diau:
     input:
@@ -27,7 +27,7 @@ rule convert:
     input:
         "../results/diau/{run}_{qual}.mgf"
     output:
-        "../results/library/{run}_{qual}.mzXML"
+        "../data_dda/{run}_{qual}.mzXML"
     shell:
         "outdir=$(dirname {output}) && "
         "msconvert {input} --mzXML --32 -o $outdir"
