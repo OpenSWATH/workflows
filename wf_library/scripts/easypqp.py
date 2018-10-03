@@ -1,4 +1,5 @@
 import os
+import re
 import operator
 import pandas as pd
 
@@ -96,7 +97,7 @@ pepid = pd.concat(pepid_list).reset_index(drop=True)
 # Patch TPP modifications
 for idx, modification in pd.read_csv(snakemake.params['library_modifications']).iterrows():
   print("Replace TPP modification '%s' with UniMod modification '%s'" % (modification['TPP'], modification['UniMod']))
-  pepid['modified_peptide'] = pepid['modified_peptide'].str.replace(modification['TPP'],modification['UniMod'])
+  pepid['modified_peptide'] = pepid['modified_peptide'].str.replace(re.escape(modification['TPP']), modification['UniMod'])
 
 # Generate set of best replicate identifications per run
 pepidr = pepid.loc[pepid.groupby(['base_name','modified_peptide','assumed_charge'])['probability'].idxmax()].sort_index()
@@ -142,5 +143,3 @@ for idx, peak_file in peak_files.iterrows():
   global_pqp.columns = ['PrecursorMz','ProductMz','LibraryIntensity','NormalizedRetentionTime','ProteinId','PeptideSequence','ModifiedPeptideSequence','PrecursorCharge']
   global_pqp_path = os.path.splitext(peak_file['path'])[0]+"_global_peaks.tsv"
   global_pqp.to_csv(global_pqp_path, sep="\t", index=False)
-
-sys.exit("Done")
