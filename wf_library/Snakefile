@@ -11,6 +11,8 @@ rule decoydb:
         "../data_library/library.fasta"
     output:
         "../results/library/library.fasta"
+    singularity:
+        "docker://openswath/develop"
     shell:
         "DecoyDatabase -in {input} -out {output}"
 
@@ -19,6 +21,8 @@ rule spectra_link:
         "../data_dda/{run}.mzXML"
     output:
         "../results/library/{run}.mzXML"
+    singularity:
+        "docker://openswath/develop"
     shell:
         "ln {input} {output}"
 
@@ -28,6 +32,8 @@ rule msfragger:
         mzxml = rules.spectra_link.output
     output:
         "../results/library/{run}.pepXML"
+    singularity:
+        "docker://openswath/develop"
     threads: 4
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
@@ -40,6 +46,8 @@ rule peptideprophet:
         pepxml = rules.msfragger.output
     output:
         "../results/library/interact-{run}.pepXML"
+    singularity:
+        "docker://openswath/develop"
     shell:
         "InteractParser {output} {input.pepxml} -D{input.fasta} && PeptideProphetParser {output} ACCMASS NONPARAM PPM DECOY=DECOY_"
 
@@ -49,6 +57,8 @@ rule iprophet:
         pepxml = rules.peptideprophet.output
     output:
         "../results/library/iprophet-{run}.pepXML"
+    singularity:
+        "docker://openswath/develop"
     threads: 1
     shell:
         "InterProphetParser DECOY=DECOY_ THREADS={threads} {input.pepxml} {output} && RefreshParser {output} {input.fasta}"
@@ -59,6 +69,8 @@ rule easypqp:
         mzxml = expand("../results/library/{run}.mzXML", run=run_ids),
     output:
         temp(touch("easypqp.done"))
+    singularity:
+        "docker://openswath/develop"
     params:
         library_modifications = "library_modifications.params",
         fdr_threshold = 0.01
@@ -73,6 +85,8 @@ rule global_target_pqp:
         peaks = "../results/library/{run}_global_peaks.tsv"
     output:
         temp("../results/library/{run}_global_pqp.tsv")
+    singularity:
+        "docker://openswath/develop"
     shell:
         "OpenSwathAssayGenerator -in {params.peaks} -out {output}"
 
@@ -81,6 +95,8 @@ rule global_combined_pqp:
         expand("../results/library/{run}_global_pqp.tsv", run=run_ids)
     output:
         temp("../results/library/combined_global_pqp.tsv")
+    singularity:
+        "docker://openswath/develop"
     shell:
         "awk 'BEGIN {{ FS=\"\t\"; OFS=\"\t\" }} FNR>1 || NR==1 {{print $1,$2,$3,$4,$5,$6,$7,$8,$14,$16,$17}}' {input} > {output}"
 
@@ -89,5 +105,7 @@ rule global_combined_decoy_pqp:
         rules.global_combined_pqp.output
     output:
         "../data_library/library.pqp"
+    singularity:
+        "docker://openswath/develop"
     shell:
         "OpenSwathDecoyGenerator -in {input} -out {output}"

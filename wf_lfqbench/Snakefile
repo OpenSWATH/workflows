@@ -7,6 +7,8 @@ rule copy:
         "../results/tric/feature_alignment.tsv"
     output:
         "../results/lfqbench/OpenSWATH.tsv"
+    singularity:
+        "docker://openswath/develop"
     shell:
         "ln {input} {output}"
 
@@ -15,6 +17,8 @@ rule lfqbench:
         rules.copy.output
     output:
         "../results/lfqbench/plot/SampleComposition.pdf"
+    singularity:
+        "docker://openswath/develop"
     script:
         "scripts/lfqbench.R"
 

@@ -16,6 +16,8 @@ rule diau:
         q1 = "../results/diau/{run}_Q1.mgf",
         q2 = "../results/diau/{run}_Q2.mgf",
         q3 = "../results/diau/{run}_Q3.mgf"
+    singularity:
+        "docker://openswath/develop"
     threads: 4
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
@@ -28,6 +30,8 @@ rule convert:
         "../results/diau/{run}_{qual}.mgf"
     output:
         "../data_dda/{run}_{qual}.mzXML"
+    singularity:
+        "docker://openswath/develop"
     shell:
         "outdir=$(dirname {output}) && "
         "msconvert {input} --mzXML --32 -o $outdir"
