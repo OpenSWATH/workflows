@@ -12,7 +12,8 @@ from scipy.interpolate import interp1d
 import xml.etree.ElementTree as ET
 
 # mzML parsing
-import pymzml
+# import pymzml
+import pyopenms as po
 
 def read_pepxml(infile, fdr_threshold):
   peptides = []
@@ -44,7 +45,9 @@ def read_pepxml(infile, fdr_threshold):
 
             # parse either peptide or modified peptide
             peptide = search_hit.attrib['peptide']
-            protein = search_hit.attrib['protein'].split(" ")[0]
+            protein = search_hit.attrib['protein']
+            num_tot_proteins = int(search_hit.attrib['num_tot_proteins'])
+
             if search_hit.find('.//pepxml_ns:modification_info', namespaces):
               modified_peptide = search_hit.find('.//pepxml_ns:modification_info', namespaces).attrib['modified_peptide']
             else:
@@ -52,7 +55,7 @@ def read_pepxml(infile, fdr_threshold):
 
             probability = float(search_hit.find('.//pepxml_ns:interprophet_result', namespaces).attrib['probability'])
 
-            if probability >= prob_threshold:
+            if probability >= prob_threshold and num_tot_proteins == 1:
               peptides.append({'base_name': base_name, 'index': int(index), 'start_scan': int(start_scan), 'end_scan': int(end_scan), 'assumed_charge': int(assumed_charge), 'retention_time_sec': float(retention_time_sec), 'hit_rank': int(hit_rank), 'peptide': peptide, 'modified_peptide': modified_peptide, 'protein': protein, 'probability': float(probability)})
 
   df = pd.DataFrame(peptides)
@@ -60,6 +63,8 @@ def read_pepxml(infile, fdr_threshold):
 
 def lowess(run, reference_run):
   dfm = pd.merge(run, reference_run[['modified_peptide','assumed_charge','irt']])
+
+  print("Info: Peptide overlap between run and reference: %s." % dfm.shape[0])
 
   # Fit lowess model
   lwf = sm.nonparametric.lowess(dfm['irt'], dfm['retention_time_sec'], frac=.66)
@@ -72,14 +77,39 @@ def lowess(run, reference_run):
 
   return run
 
-def read_mzml(mzml_path, scan_ids):
-  msrun = pymzml.run.Reader(mzml_path)
+# def read_mzml(mzml_path, scan_ids):
+#   msrun = pymzml.run.Reader(mzml_path)
+
+#   peaks_list = []
+#   for scan_id in scan_ids:
+#     spectrum = msrun[scan_id]
+#     peaks = pd.DataFrame(spectrum.peaks, columns=['product_mz', 'intensity'])
+#     peaks['precursor_mz'] = spectrum['precursors'][0]['mz']
+#     peaks['start_scan'] = scan_id
+#     peaks_list.append(peaks)
+
+#   transitions = pd.concat(peaks_list)
+#   return(transitions)
+
+def read_mzxml(mzxml_path, scan_ids):
+  fh = po.MzXMLFile()
+  fh.setLogType(po.LogType.CMD)
+  input_map = po.MSExperiment()
+  fh.load(mzxml_path, input_map)
 
   peaks_list = []
   for scan_id in scan_ids:
-    spectrum = msrun[scan_id]
-    peaks = pd.DataFrame(spectrum.peaks, columns=['product_mz', 'intensity'])
-    peaks['precursor_mz'] = spectrum['precursors'][0]['mz']
+
+    spectrum = input_map.getSpectrum(scan_id - 1)
+
+    product_mzs = []
+    intensities = []
+    for peak in spectrum:
+      product_mzs.append(peak.getMZ())
+      intensities.append(peak.getIntensity())
+
+    peaks = pd.DataFrame({'product_mz': product_mzs, 'intensity': intensities})
+    peaks['precursor_mz'] = spectrum.getPrecursors()[0].getMZ()
     peaks['start_scan'] = scan_id
     peaks_list.append(peaks)
 
@@ -122,21 +152,22 @@ pepida = pd.concat([reference_run, aligned_runs]).reset_index(drop=True)
 pepidb = pepida.loc[pepida.groupby(['modified_peptide','assumed_charge'])['probability'].idxmax()].sort_index()
 
 # Prepare ID mzML pairing
-peak_files = pd.DataFrame({'path': snakemake.input['mzml']})
+peak_files = pd.DataFrame({'path': snakemake.input['mzxml']})
 peak_files['base_name'] = peak_files['path'].apply(lambda x: os.path.splitext(os.path.basename(x))[0])
 
-# Parse mzML to retrieve peaks and store results in peak files
+# Parse mzXML to retrieve peaks and store results in peak files
 for idx, peak_file in peak_files.iterrows():
   print("Parsing file %s." % peak_file['path'])
   meta_run = pepida[pepida['base_name'] == peak_file['base_name']]
   meta_global = pepidb[pepidb['base_name'] == peak_file['base_name']]
-  peaks = read_mzml(peak_file['path'], meta_run['start_scan'].tolist())
+  peaks = read_mzxml(peak_file['path'], meta_run['start_scan'].tolist())
   
-  # Generate run-specific PQP files
-  run_pqp = pd.merge(meta_run, peaks, on='start_scan')[['precursor_mz','product_mz','intensity','irt','protein','peptide','modified_peptide','assumed_charge']]
-  run_pqp.columns = ['PrecursorMz','ProductMz','LibraryIntensity','NormalizedRetentionTime','ProteinId','PeptideSequence','ModifiedPeptideSequence','PrecursorCharge']
-  run_pqp_path = os.path.splitext(peak_file['path'])[0]+"_run_peaks.tsv"
-  run_pqp.to_csv(run_pqp_path, sep="\t", index=False)
+  # Generate run-specific PQP files for OpenSWATH alignment
+  if "_Q1" in peak_file['base_name']:
+    run_pqp = pd.merge(meta_run, peaks, on='start_scan')[['precursor_mz','product_mz','intensity','irt','protein','peptide','modified_peptide','assumed_charge']]
+    run_pqp.columns = ['PrecursorMz','ProductMz','LibraryIntensity','NormalizedRetentionTime','ProteinId','PeptideSequence','ModifiedPeptideSequence','PrecursorCharge']
+    run_pqp_path = os.path.splitext(peak_file['path'])[0]+"_run_peaks.tsv"
+    run_pqp.to_csv(run_pqp_path, sep="\t", index=False)
 
   # Generate global non-redundant PQP files
   global_pqp = pd.merge(meta_global, peaks, on='start_scan')[['precursor_mz','product_mz','intensity','irt','protein','peptide','modified_peptide','assumed_charge']]

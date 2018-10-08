@@ -5,36 +5,17 @@ rule all:
     input:
         "tric_feature_alignment.done"
 
-rule irt_spectrast_consensus:
+rule run_target_pqp:
     input:
-        "../results/library/rtn-{run}_Q1.splib"
+        "../results/library/{run}_Q1_run_peaks.tsv"
     output:
-        name = touch("../results/openswath/irt_{run}/consensus"),
-        splib = "../results/openswath/irt_{run}/consensus.splib"
-    shell:
-        "spectrast -cQ20 -cN{output.name} -cAC {input}"
-
-rule irt_spectrast_filter:
-    input:
-        fasta = "../data_library/library.fasta",
-        splib = rules.irt_spectrast_consensus.output.splib
-    output:
-        name = touch("../results/openswath/irt_{run}/proteotypic"),
-        mrm = "../results/openswath/irt_{run}/proteotypic.mrm"
-    shell:
-        "spectrast -cN{output.name} -cM -cu -cd -cD{input.fasta} {input.splib}"
-
-rule irt_generate_swath_assays:
-    input:
-        rules.irt_spectrast_filter.output.mrm
-    output:
-        "../results/openswath/irt_{run}/assays.pqp"
+        "../results/openswath/{run}.pqp"
     shell:
         "OpenSwathAssayGenerator -in {input} -out {output}"
 
-rule irt_filter_swath_assays:
+rule irt_filter_pqp:
     input:
-        rules.irt_generate_swath_assays.output
+        rules.run_target_pqp.output
     params:
         bins = 10,
         peptides = 5
@@ -43,9 +24,9 @@ rule irt_filter_swath_assays:
     script:
         "scripts/hrirt.R"
 
-rule irt_nonlinear_filter_swath_assays:
+rule irt_nonlinear_filter_pqp:
     input:
-        rules.irt_generate_swath_assays.output
+        rules.run_target_pqp.output
     params:
         bins = 1000,
         peptides = 5
@@ -56,8 +37,8 @@ rule irt_nonlinear_filter_swath_assays:
 
 rule openswath:
     input:
-        irt_linear=rules.irt_filter_swath_assays.output,
-        irt_nonlinear=rules.irt_nonlinear_filter_swath_assays.output,
+        irt_linear=rules.irt_filter_pqp.output,
+        irt_nonlinear=rules.irt_nonlinear_filter_pqp.output,
         mzxml="../data_dia/{run}.mzXML",
     output:
         osw="../results/openswath/{run}.osw",

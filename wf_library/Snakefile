@@ -18,18 +18,9 @@ rule spectra_link:
     input:
         "../data_dda/{run}.mzXML"
     output:
-        temp("../results/library/{run}.mzXML")
+        "../results/library/{run}.mzXML"
     shell:
         "ln {input} {output}"
-
-rule spectra_convert:
-    input:
-        "../results/library/{run}.mzXML"
-    output:
-        "../results/library/{run}.mzML"
-    shell:
-        "outdir=$(dirname {output}) && "
-        "msconvert {input} --32 -o $outdir"
 
 rule msfragger:
     input:
@@ -54,19 +45,20 @@ rule peptideprophet:
 
 rule iprophet:
     input:
-        expand("../results/library/interact-{run}.pepXML", run=run_ids)
+        fasta = rules.decoydb.input,
+        pepxml = rules.peptideprophet.output
     output:
-        "../results/library/iprophet.pepXML"
-    threads: 4
+        "../results/library/iprophet-{run}.pepXML"
+    threads: 1
     shell:
-        "InterProphetParser DECOY=DECOY_ THREADS={threads} {input} {output}"
+        "InterProphetParser DECOY=DECOY_ THREADS={threads} {input.pepxml} {output} && RefreshParser {output} {input.fasta}"
 
 rule easypqp:
     input:
-        pepxml = rules.iprophet.output,
-        mzml = expand("../results/library/{run}.mzML", run=run_ids),
+        pepxml = expand("../results/library/iprophet-{run}.pepXML", run=run_ids),
+        mzxml = expand("../results/library/{run}.mzXML", run=run_ids),
     output:
-        temp(touch("calibrated.iRT"))
+        temp(touch("easypqp.done"))
     params:
         library_modifications = "library_modifications.params",
         fdr_threshold = 0.01
@@ -76,7 +68,7 @@ rule easypqp:
 
 rule global_target_pqp:
     input:
-        iRT = "calibrated.iRT"
+        iRT = "easypqp.done"
     params:
         peaks = "../results/library/{run}_global_peaks.tsv"
     output:
