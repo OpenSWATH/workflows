@@ -74,9 +74,8 @@ rule easypqp:
     params:
         library_modifications = "params/library_modifications.params",
         fdr_threshold = 0.01
-    threads: 1
-    script:
-        "scripts/easypqp.py"
+    shell:
+        "python3 scripts/easypqp.py {params.library_modifications} {params.fdr_threshold} {input.pepxml} {input.mzxml}"
 
 rule global_target_pqp:
     input:
@@ -95,8 +94,6 @@ rule global_combined_pqp:
         expand("results/library/{run}_global_pqp.tsv", run=run_ids)
     output:
         temp("results/library/combined_global_pqp.tsv")
-    singularity:
-        "develop.simg"
     shell:
         "awk 'BEGIN {{ FS=\"\t\"; OFS=\"\t\" }} FNR>1 || NR==1 {{print $1,$2,$3,$4,$5,$6,$7,$8,$14,$16,$17}}' {input} > {output}"
 

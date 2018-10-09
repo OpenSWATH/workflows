@@ -1,3 +1,4 @@
+import sys
 import os
 import re
 import operator
@@ -116,16 +117,27 @@ def read_mzxml(mzxml_path, scan_ids):
   transitions = pd.concat(peaks_list)
   return(transitions)
 
+# Parse input arguments
+pepxmls = []
+mzxmls = []
+library_modifications = sys.argv[1]
+fdr_threshold = float(sys.argv[2])
+for arg in sys.argv[3:]:
+  if 'pepXML' in arg:
+    pepxmls.append(arg)
+  if 'mzXML' in arg:
+    mzxmls.append(arg)
+
 # Parse all pepXML files
 pepid_list = []
-for pepxml in snakemake.input['pepxml']:
+for pepxml in pepxmls:
   print("Reading file %s." % pepxml)
-  pepid_file = read_pepxml(pepxml, snakemake.params['fdr_threshold'])
+  pepid_file = read_pepxml(pepxml, fdr_threshold)
   pepid_list.append(pepid_file)
 pepid = pd.concat(pepid_list).reset_index(drop=True)
 
 # Patch TPP modifications
-for idx, modification in pd.read_csv(snakemake.params['library_modifications']).iterrows():
+for idx, modification in pd.read_csv(library_modifications).iterrows():
   print("Replace TPP modification '%s' with UniMod modification '%s'" % (modification['TPP'], modification['UniMod']))
   pepid['modified_peptide'] = pepid['modified_peptide'].str.replace(re.escape(modification['TPP']), modification['UniMod'])
 
@@ -152,7 +164,7 @@ pepida = pd.concat([reference_run, aligned_runs]).reset_index(drop=True)
 pepidb = pepida.loc[pepida.groupby(['modified_peptide','assumed_charge'])['probability'].idxmax()].sort_index()
 
 # Prepare ID mzML pairing
-peak_files = pd.DataFrame({'path': snakemake.input['mzxml']})
+peak_files = pd.DataFrame({'path': mzxmls})
 peak_files['base_name'] = peak_files['path'].apply(lambda x: os.path.splitext(os.path.basename(x))[0])
 
 # Parse mzXML to retrieve peaks and store results in peak files
