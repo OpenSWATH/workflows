@@ -8,7 +8,7 @@ rule copy:
     output:
         "../results/lfqbench/OpenSWATH.tsv"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "ln {input} {output}"
 
@@ -18,7 +18,7 @@ rule lfqbench:
     output:
         "../results/lfqbench/plot/SampleComposition.pdf"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     script:
         "scripts/lfqbench.R"
 

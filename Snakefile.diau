@@ -1,0 +1,37 @@
+# Obtain run_ids from centroided DIA mzXML files in dia_data folder
+run_ids, = glob_wildcards("data_dia/{mzxml}.mzXML")
+
+# Define DIA-Umpire pseudo-spectra quality groups
+qual_ids = ["Q1","Q2","Q3"]
+
+rule all:
+    input:
+        expand("data_dda/{run}_{qual}.mzXML", run=run_ids, qual=qual_ids)
+
+rule diau:
+    input:
+        "data_dia/{run}.mzXML"
+    output:
+        mzXML = temp("results/diau/{run}.mzXML"),
+        q1 = "results/diau/{run}_Q1.mgf",
+        q2 = "results/diau/{run}_Q2.mgf",
+        q3 = "results/diau/{run}_Q3.mgf"
+    singularity:
+        "develop.simg"
+    threads: 4
+    resources:
+        mem_mb=lambda wildcards, attempt: attempt * 8192
+    shell:
+        "ln {input} {output.mzXML} && "
+        "java -Xmx8G -jar $(which DIA_Umpire_SE.jar) {output.mzXML} params/diaumpire_se_Thermo_params.txt"
+
+rule convert:
+    input:
+        "results/diau/{run}_{qual}.mgf"
+    output:
+        "data_dda/{run}_{qual}.mzXML"
+    singularity:
+        "develop.simg"
+    shell:
+        "outdir=$(dirname {output}) && "
+        "msconvert {input} --mzXML --32 -o $outdir"

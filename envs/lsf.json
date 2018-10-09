@@ -9,9 +9,19 @@
         "error"     : "logs/cluster/{rule}.{wildcards}.err"
     },
 
+    "diau" :
+    {
+	"nCPUs"     : "4"
+    },
+
+    "msfragger" :
+    {
+	"nCPUs"     : "4"
+    },
 
     "openswath" :
     {
         "nCPUs"     : "4"
     }
 }
+

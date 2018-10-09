@@ -11,7 +11,7 @@ rule run_target_pqp:
     output:
         "../results/openswath/{run}.pqp"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "OpenSwathAssayGenerator -in {input} -out {output}"
 
@@ -24,7 +24,7 @@ rule irt_filter_pqp:
     output:
         "../results/openswath/irt_{run}.pqp"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     script:
         "scripts/hrirt.R"
 
@@ -37,7 +37,7 @@ rule irt_nonlinear_filter_pqp:
     output:
         "../results/openswath/irt_nonlinear_{run}.pqp"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     script:
         "scripts/hrirt.R"
 
@@ -50,7 +50,7 @@ rule openswath:
         osw="../results/openswath/{run}.osw",
         cache=temp(directory("/tmp/{run}/"))
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     threads: 4
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
@@ -65,7 +65,7 @@ rule pyprophet_model:
     output:
         "../results/pyprophet/runspecific/model.osw",
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "pyprophet merge --subsample_ratio={params.subsample_ratio} --out {output} {input} && "
         "pyprophet score --in {output} --level=ms1ms2"
@@ -80,7 +80,7 @@ rule pyprophet_apply:
         osw = "../results/pyprophet/runspecific/{run}.osw",
         oswr = "../results/pyprophet/runspecific/{run}.oswr"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "pyprophet score --in {input.osw} --out {output.osw} --apply_weights {input.model} --level=ms1ms2 && "
         # "pyprophet score --in {output.osw} --apply_weights {input.model} --level=ms1 && "
@@ -95,7 +95,7 @@ rule pyprophet_global:
     output:
         "../results/pyprophet/global/model.oswr"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "pyprophet merge --template {input.template} --out {output} {input.oswr} && "
         "pyprophet peptide --context=global --in {output} && "
@@ -108,7 +108,7 @@ rule pyprophet_backpropagate:
     output:
         "../results/pyprophet/integrated/{run}.osw"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "pyprophet backpropagate --apply_scores {input.model} --in {input.osw}  --out {output} && "
         "pyprophet export --in {output}"
@@ -119,7 +119,7 @@ rule tric_prepare:
     output:
         "../results/tric/{run}.mzXML.tsv"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "pyprophet export --in={input} && mv $(basename {output}) {output}"
 
@@ -131,7 +131,7 @@ rule tric_feature_alignment:
         matrix="../results/tric/feature_alignment_matrix.tsv",
         check=temp(touch("tric_feature_alignment.done"))
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "feature_alignment.py --in {input} --out {output.long} --out_matrix {output.matrix} --method LocalMST --realign_method lowess_cython --max_rt_diff 60 --mst:useRTCorrection True --mst:Stdev_multiplier 3.0 --target_fdr 0.01 --max_fdr_quality 0.05"
 

@@ -1,28 +1,28 @@
 # Obtain run_ids from DDA or DIA-ps mzXML files in data folder
-run_ids, = glob_wildcards("../data_dda/{run}.mzXML")
+run_ids, = glob_wildcards("data_dda/{run}.mzXML")
 
 rule all:
     input:
-        global_target_pqp =  expand("../results/library/{run}_global_pqp.tsv", run=run_ids),
-        pqp = "../data_library/library.pqp"
+        global_target_pqp =  expand("results/library/{run}_global_pqp.tsv", run=run_ids),
+        pqp = "data_library/library.pqp"
 
 rule decoydb:
     input:
-        "../data_library/library.fasta"
+        "data_library/library.fasta"
     output:
-        "../results/library/library.fasta"
+        "results/library/library.fasta"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "DecoyDatabase -in {input} -out {output}"
 
 rule spectra_link:
     input:
-        "../data_dda/{run}.mzXML"
+        "data_dda/{run}.mzXML"
     output:
-        "../results/library/{run}.mzXML"
+        "results/library/{run}.mzXML"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "ln {input} {output}"
 
@@ -31,23 +31,23 @@ rule msfragger:
         fasta = rules.decoydb.output,
         mzxml = rules.spectra_link.output
     output:
-        "../results/library/{run}.pepXML"
+        "results/library/{run}.pepXML"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     threads: 4
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
     shell:
-        "java -Xmx8G -jar MSFragger-20171106.jar fragger.params {input.mzxml}"
+        "java -Xmx8G -jar MSFragger-20171106.jar params/fragger.params {input.mzxml}"
 
 rule peptideprophet:
     input:
         fasta = rules.decoydb.output,
         pepxml = rules.msfragger.output
     output:
-        "../results/library/interact-{run}.pepXML"
+        "results/library/interact-{run}.pepXML"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "InteractParser {output} {input.pepxml} -D{input.fasta} && PeptideProphetParser {output} ACCMASS NONPARAM PPM DECOY=DECOY_"
 
@@ -56,23 +56,23 @@ rule iprophet:
         fasta = rules.decoydb.input,
         pepxml = rules.peptideprophet.output
     output:
-        "../results/library/iprophet-{run}.pepXML"
+        "results/library/iprophet-{run}.pepXML"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     threads: 1
     shell:
         "InterProphetParser DECOY=DECOY_ THREADS={threads} {input.pepxml} {output} && RefreshParser {output} {input.fasta}"
 
 rule easypqp:
     input:
-        pepxml = expand("../results/library/iprophet-{run}.pepXML", run=run_ids),
-        mzxml = expand("../results/library/{run}.mzXML", run=run_ids),
+        pepxml = expand("results/library/iprophet-{run}.pepXML", run=run_ids),
+        mzxml = expand("results/library/{run}.mzXML", run=run_ids),
     output:
         temp(touch("easypqp.done"))
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     params:
-        library_modifications = "library_modifications.params",
+        library_modifications = "params/library_modifications.params",
         fdr_threshold = 0.01
     threads: 1
     script:
@@ -82,21 +82,21 @@ rule global_target_pqp:
     input:
         iRT = "easypqp.done"
     params:
-        peaks = "../results/library/{run}_global_peaks.tsv"
+        peaks = "results/library/{run}_global_peaks.tsv"
     output:
-        temp("../results/library/{run}_global_pqp.tsv")
+        temp("results/library/{run}_global_pqp.tsv")
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "OpenSwathAssayGenerator -in {params.peaks} -out {output}"
 
 rule global_combined_pqp:
     input:
-        expand("../results/library/{run}_global_pqp.tsv", run=run_ids)
+        expand("results/library/{run}_global_pqp.tsv", run=run_ids)
     output:
-        temp("../results/library/combined_global_pqp.tsv")
+        temp("results/library/combined_global_pqp.tsv")
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "awk 'BEGIN {{ FS=\"\t\"; OFS=\"\t\" }} FNR>1 || NR==1 {{print $1,$2,$3,$4,$5,$6,$7,$8,$14,$16,$17}}' {input} > {output}"
 
@@ -104,8 +104,8 @@ rule global_combined_decoy_pqp:
     input:
         rules.global_combined_pqp.output
     output:
-        "../data_library/library.pqp"
+        "data_library/library.pqp"
     singularity:
-        "docker://openswath/develop"
+        "develop.simg"
     shell:
         "OpenSwathDecoyGenerator -in {input} -out {output}"
