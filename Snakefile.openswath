@@ -1,5 +1,5 @@
 # Obtain run_ids from centroided DIA mzXML files in dia_data folder
-run_ids, = glob_wildcards("../data_dia/{run}.mzXML")
+run_ids, = glob_wildcards("data_dia/{run}.mzXML")
 
 rule all:
     input:
@@ -7,9 +7,9 @@ rule all:
 
 rule run_target_pqp:
     input:
-        "../results/library/{run}_Q1_run_peaks.tsv"
+        "results/library/{run}_Q1_run_peaks.tsv"
     output:
-        "../results/openswath/{run}.pqp"
+        "results/openswath/{run}.pqp"
     singularity:
         "develop.simg"
     shell:
@@ -22,7 +22,7 @@ rule irt_filter_pqp:
         bins = 10,
         peptides = 5
     output:
-        "../results/openswath/irt_{run}.pqp"
+        "results/openswath/irt_{run}.pqp"
     singularity:
         "develop.simg"
     script:
@@ -35,7 +35,7 @@ rule irt_nonlinear_filter_pqp:
         bins = 1000,
         peptides = 5
     output:
-        "../results/openswath/irt_nonlinear_{run}.pqp"
+        "results/openswath/irt_nonlinear_{run}.pqp"
     singularity:
         "develop.simg"
     script:
@@ -45,9 +45,9 @@ rule openswath:
     input:
         irt_linear=rules.irt_filter_pqp.output,
         irt_nonlinear=rules.irt_nonlinear_filter_pqp.output,
-        mzxml="../data_dia/{run}.mzXML",
+        mzxml="data_dia/{run}.mzXML",
     output:
-        osw="../results/openswath/{run}.osw",
+        osw="results/openswath/{run}.osw",
         cache=temp(directory("/tmp/{run}/"))
     singularity:
         "develop.simg"
@@ -55,15 +55,15 @@ rule openswath:
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
     shell:
-        "OpenSwathWorkflow -in {input.mzxml} -tr ../data_library/library.pqp -tr_irt {input.irt_linear} -tr_irt_nonlinear {input.irt_nonlinear} -out_osw {output.osw} -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory {output.cache} -batchSize 1000 -ms1_isotopes 3 -Scoring:max_transitions 6 -Scoring:min_transitions 3 -Scoring:max_ms1_isotopes 4 -Scoring:min_ms1_isotopes 2" # -enable_uis_scoring
+        "OpenSwathWorkflow -in {input.mzxml} -tr data_library/library.pqp -tr_irt {input.irt_linear} -tr_irt_nonlinear {input.irt_nonlinear} -out_osw {output.osw} -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory {output.cache} -batchSize 1000 -ms1_isotopes 3 -Scoring:max_transitions 6 -Scoring:min_transitions 3 -Scoring:max_ms1_isotopes 4 -Scoring:min_ms1_isotopes 2" # -enable_uis_scoring
 
 rule pyprophet_model:
     input:
-        expand("../results/openswath/{run}.osw", run=run_ids)
+        expand("results/openswath/{run}.osw", run=run_ids)
     params:
         subsample_ratio = lambda wildcards, input: round(1.0/len(input),3)
     output:
-        "../results/pyprophet/runspecific/model.osw",
+        "results/pyprophet/runspecific/model.osw",
     singularity:
         "develop.simg"
     shell:
@@ -77,8 +77,8 @@ rule pyprophet_apply:
         osw = rules.openswath.output.osw,
         model = rules.pyprophet_model.output
     output:
-        osw = "../results/pyprophet/runspecific/{run}.osw",
-        oswr = "../results/pyprophet/runspecific/{run}.oswr"
+        osw = "results/pyprophet/runspecific/{run}.osw",
+        oswr = "results/pyprophet/runspecific/{run}.oswr"
     singularity:
         "develop.simg"
     shell:
@@ -91,9 +91,9 @@ rule pyprophet_apply:
 rule pyprophet_global:
     input:
         template = rules.pyprophet_model.output,
-        oswr = expand("../results/pyprophet/runspecific/{run}.oswr", run=run_ids)
+        oswr = expand("results/pyprophet/runspecific/{run}.oswr", run=run_ids)
     output:
-        "../results/pyprophet/global/model.oswr"
+        "results/pyprophet/global/model.oswr"
     singularity:
         "develop.simg"
     shell:
@@ -106,7 +106,7 @@ rule pyprophet_backpropagate:
         osw = rules.pyprophet_apply.output.osw,
         model = rules.pyprophet_global.output
     output:
-        "../results/pyprophet/integrated/{run}.osw"
+        "results/pyprophet/integrated/{run}.osw"
     singularity:
         "develop.simg"
     shell:
@@ -117,7 +117,7 @@ rule tric_prepare:
     input:
         rules.pyprophet_backpropagate.output
     output:
-        "../results/tric/{run}.mzXML.tsv"
+        "results/tric/{run}.mzXML.tsv"
     singularity:
         "develop.simg"
     shell:
@@ -125,10 +125,10 @@ rule tric_prepare:
 
 rule tric_feature_alignment:
     input:
-        expand("../results/tric/{run}.mzXML.tsv", run=run_ids)
+        expand("results/tric/{run}.mzXML.tsv", run=run_ids)
     output:
-        long="../results/tric/feature_alignment.tsv",
-        matrix="../results/tric/feature_alignment_matrix.tsv",
+        long="results/tric/feature_alignment.tsv",
+        matrix="results/tric/feature_alignment_matrix.tsv",
         check=temp(touch("tric_feature_alignment.done"))
     singularity:
         "develop.simg"
