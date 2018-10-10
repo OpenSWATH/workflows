@@ -1,12 +1,12 @@
 rule all:
     input:
-        "../results/lfqbench/plot/SampleComposition.pdf"
+        "results/lfqbench/plot/SampleComposition.pdf"
 
 rule copy:
     input:
-        "../results/tric/feature_alignment.tsv"
+        "results/tric/feature_alignment.tsv"
     output:
-        "../results/lfqbench/OpenSWATH.tsv"
+        "results/lfqbench/OpenSWATH.tsv"
     singularity:
         "develop.simg"
     shell:
@@ -16,7 +16,7 @@ rule lfqbench:
     input:
         rules.copy.output
     output:
-        "../results/lfqbench/plot/SampleComposition.pdf"
+        "results/lfqbench/plot/SampleComposition.pdf"
     singularity:
         "develop.simg"
     script:
