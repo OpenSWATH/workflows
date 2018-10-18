@@ -2,7 +2,7 @@ database_name = results/library/library.fasta
 num_threads = 4                        # 0=poll CPU to set num threads; else specify num threads directly (max 64)
 
 precursor_mass_tolerance = 20.00
-precursor_mass_units = 0               # 0=Daltons, 1=ppm
+precursor_mass_units = 1               # 0=Daltons, 1=ppm
 precursor_true_tolerance = 20.00
 precursor_true_units = 1               # 0=Daltons, 1=ppm
 fragment_mass_tolerance = 20.00
@@ -30,8 +30,8 @@ allow_multiple_variable_mods_on_residue = 1  	# static mods are not considered
 max_variable_mods_per_mod = 3 			        # maximum of 5
 max_variable_mods_combinations = 1000  		    # maximum of 65534, limits number of modified peptides generated from sequence
 
-output_file_extension = pepXML	       #pepXML
-output_format = pepXML				   #pepXML or tsv
+output_file_extension = tsv	       #pepXML
+output_format = tsv				   #pepXML or tsv
 output_report_topN = 1 
 output_max_expect = 50
 
@@ -52,7 +52,7 @@ add_topN_complementary = 0
 # spectral processing
 
 minimum_peaks = 15                   # required minimum number of peaks in spectrum to search (default 10)
-use_topN_peaks = 100
+use_topN_peaks = 300
 min_fragments_modelling = 3
 min_matched_fragments = 6 
 minimum_ratio = 0.01		         # filter peaks below this fraction of strongest peak

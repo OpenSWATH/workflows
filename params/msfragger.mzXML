@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<mzXML xmlns="http://sashimi.sourceforge.net/schema_revision/mzXML_3.2"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://sashimi.sourceforge.net/schema_revision/mzXML_3.2 http://sashimi.sourceforge.net/schema_revision/mzXML_3.2/mzXML_idx_3.2.xsd">
+  <msRun scanCount="63776" startTime="PT0.0882062S" endTime="PT7919.81S">
+    <parentFile fileName="msfragger.raw"
+                fileType="RAWData"
+                fileSha1="7abcd1bf5d35c9cfc274267c64cb48c585bcb90e"/>
+    <msInstrument msInstrumentID="1">
+      <msManufacturer category="msManufacturer" value="Thermo Scientific"/>
+      <msModel category="msModel" value="Orbitrap Fusion"/>
+      <msIonisation category="msIonisation" value="nanoelectrospray"/>
+      <msMassAnalyzer category="msMassAnalyzer" value="quadrupole"/>
+      <msDetector category="msDetector" value="inductive detector"/>
+      <software type="acquisition" name="Xcalibur" version="2.0.1258.15"/>
+    </msInstrument>
+    <msInstrument msInstrumentID="2">
+      <msManufacturer category="msManufacturer" value="Thermo Scientific"/>
+      <msModel category="msModel" value="Orbitrap Fusion"/>
+      <msIonisation category="msIonisation" value="nanoelectrospray"/>
+      <msMassAnalyzer category="msMassAnalyzer" value="quadrupole"/>
+      <msDetector category="msDetector" value="electron multiplier"/>
+      <software type="acquisition" name="Xcalibur" version="2.0.1258.15"/>
+    </msInstrument>
+    <dataProcessing centroided="1">
+      <software type="conversion" name="ProteoWizard software" version="3.0.9393"/>
+      <processingOperation name="Conversion to mzML"/>
+      <software type="processing" name="ProteoWizard software" version="3.0.9393"/>
+      <comment>Thermo/Xcalibur peak picking</comment>
+    </dataProcessing>
+  </msRun>
+</mzXML>

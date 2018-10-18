@@ -26,12 +26,12 @@ rule spectra_link:
     shell:
         "ln {input} {output}"
 
-rule msfragger:
+rule msfragger_index:
     input:
         fasta = rules.decoydb.output,
-        mzxml = rules.spectra_link.output
+        mzxml = "params/msfragger.mzXML"
     output:
-        "results/library/{run}.pepXML"
+        "results/library/library.fasta.1.pepindex"
     singularity:
         "develop.simg"
     threads: 4
@@ -40,42 +40,60 @@ rule msfragger:
     shell:
         "java -Xmx8G -jar MSFragger-20171106.jar params/fragger.params {input.mzxml}"
 
-rule peptideprophet:
+rule msfragger_search:
     input:
         fasta = rules.decoydb.output,
-        pepxml = rules.msfragger.output
+        index = rules.msfragger_index.output,
+        mzxml = rules.spectra_link.output
     output:
-        "results/library/interact-{run}.pepXML"
+        "results/library/{run}.tsv"
     singularity:
         "develop.simg"
+    threads: 4
+    resources:
+        mem_mb=lambda wildcards, attempt: attempt * 8192
     shell:
-        "InteractParser {output} {input.pepxml} -D{input.fasta} && PeptideProphetParser {output} ACCMASS NONPARAM PPM DECOY=DECOY_"
+        "java -Xmx8G -jar MSFragger-20171106.jar params/fragger.params {input.mzxml}"
 
-rule iprophet:
+rule msfragger_convert:
     input:
-        fasta = rules.decoydb.input,
-        pepxml = rules.peptideprophet.output
+        fasta = rules.decoydb.output,
+        psms = rules.msfragger_search.output
     output:
-        "results/library/iprophet-{run}.pepXML"
+        "results/library/{run}_pyprophet.tsv"
     singularity:
         "develop.simg"
-    threads: 1
     shell:
-        "InterProphetParser DECOY=DECOY_ THREADS={threads} {input.pepxml} {output} && RefreshParser {output} {input.fasta}"
+        "python3 scripts/fragger2pyprophet.py {input.psms} {input.fasta} {output}"
+
+rule pyprophet:
+    input:
+        expand("results/library/{run}_pyprophet.tsv", run=run_ids),
+    output:
+        "results/library/pyprophet_psms_scored.tsv"
+    params:
+        merged = "results/library/pyprophet_psms.tsv"
+    singularity:
+        "develop.simg"
+    threads: 4
+    shell:
+        "awk 'BEGIN {{ FS=\"\t\"; OFS=\"\t\" }} FNR>1 || NR==1 {{print $0}}' {input} > {params.merged} && "
+        "pyprophet score --in {params.merged} --threads={threads}"
 
 rule easypqp:
     input:
-        pepxml = expand("results/library/iprophet-{run}.pepXML", run=run_ids),
+        psms = rules.pyprophet.output,
         mzxml = expand("results/library/{run}.mzXML", run=run_ids),
     output:
         temp(touch("easypqp.done"))
     singularity:
         "develop.simg"
     params:
-        library_modifications = "params/library_modifications.params",
-        fdr_threshold = 0.01
+        psm_fdr_threshold = 0.01,
+        peptide_fdr_threshold = 0.01,
+        protein_fdr_threshold = 0.01
     shell:
-        "python3 scripts/easypqp.py {params.library_modifications} {params.fdr_threshold} {input.pepxml} {input.mzxml}"
+        "python3 scripts/easypqp.py {params.psm_fdr_threshold} {params.peptide_fdr_threshold} {params.protein_fdr_threshold} {input.psms} {input.mzxml}"
 
 rule global_target_pqp:
     input:
@@ -95,7 +113,7 @@ rule global_combined_pqp:
     output:
         temp("results/library/combined_global_pqp.tsv")
     shell:
-        "awk 'BEGIN {{ FS=\"\t\"; OFS=\"\t\" }} FNR>1 || NR==1 {{print $1,$2,$3,$4,$5,$6,$7,$8,$14,$16,$17}}' {input} > {output}"
+        "awk 'BEGIN {{ FS=\"\t\"; OFS=\"\t\" }} FNR>1 || NR==1 {{print $1,$2,$3,$4,$5,$6,$7,$8,$14,$16,$17,$18,$23,$24,$25,$26,$27}}' {input} > {output}"
 
 rule global_combined_decoy_pqp:
     input:
