@@ -17,7 +17,7 @@ search_enzyme_butnotafter = P
 num_enzyme_termini = 2                 # 2 for enzymatic, 1 for semi-enzymatic, 0 for nonspecific digestion
 allowed_missed_cleavage = 1            # maximum value is 5
 
-clip_nTerm_M = 1 
+clip_nTerm_M = 0 
 
 #maximum of 7 mods - amino acid codes, * for any amino acid, ^ for termini, [ and ] specifies protein termini, n and c specifies peptide termini
 variable_mod_01 = 15.9949 M

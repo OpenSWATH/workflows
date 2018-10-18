@@ -16,6 +16,19 @@ rule decoydb:
     shell:
         "DecoyDatabase -in {input} -out {output}"
 
+rule digestdb:
+    input:
+        rules.decoydb.output
+    output:
+        "results/library/peptides.pkl"
+    params:
+        peptides = "results/library/peptides.fasta"
+    singularity:
+        "develop.simg"
+    shell:
+        "Digestor -in {input} -out {params.peptides} -missed_cleavages 1 -min_length 7 -max_length 50 -enzyme Trypsin && "
+        "python3 scripts/fasta2index.py {params.peptides} {output}"
+
 rule spectra_link:
     input:
         "data_dda/{run}.mzXML"
@@ -31,19 +44,20 @@ rule msfragger_index:
         fasta = rules.decoydb.output,
         mzxml = "params/msfragger.mzXML"
     output:
-        "results/library/library.fasta.1.pepindex"
+        index = "results/library/library.fasta.1.pepindex",
+        tmp = temp("params/msfragger.tsv")
     singularity:
         "develop.simg"
     threads: 4
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
     shell:
-        "java -Xmx8G -jar MSFragger-20171106.jar params/fragger.params {input.mzxml}"
+        "java -Xmx{resources.mem_mb}M -jar MSFragger-20180316.jar params/fragger.params {input.mzxml}"
 
 rule msfragger_search:
     input:
         fasta = rules.decoydb.output,
-        index = rules.msfragger_index.output,
+        index = rules.msfragger_index.output.index,
         mzxml = rules.spectra_link.output
     output:
         "results/library/{run}.tsv"
@@ -53,11 +67,11 @@ rule msfragger_search:
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
     shell:
-        "java -Xmx8G -jar MSFragger-20171106.jar params/fragger.params {input.mzxml}"
+        "java -Xmx{resources.mem_mb}M -jar MSFragger-20180316.jar params/fragger.params {input.mzxml}"
 
 rule msfragger_convert:
     input:
-        fasta = rules.decoydb.output,
+        fasta = rules.digestdb.output,
         psms = rules.msfragger_search.output
     output:
         "results/library/{run}_pyprophet.tsv"

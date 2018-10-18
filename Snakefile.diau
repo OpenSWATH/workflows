@@ -23,7 +23,7 @@ rule diau:
         mem_mb=lambda wildcards, attempt: attempt * 8192
     shell:
         "ln {input} {output.mzXML} && "
-        "java -Xmx8G -jar $(which DIA_Umpire_SE.jar) {output.mzXML} params/diaumpire_se_Thermo_params.txt"
+        "java -Xmx{resources.mem_mb}M -jar $(which DIA_Umpire_SE.jar) {output.mzXML} params/diaumpire_se_Thermo_params.txt"
 
 rule convert:
     input:

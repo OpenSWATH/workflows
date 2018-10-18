@@ -2,19 +2,9 @@ import numpy as np
 import pandas as pd
 import sys
 
-from Bio import SeqIO
 import pyopenms as po
 
 mdb = po.ModificationsDB()
-
-def parse_fasta(file):
-	proteins = list(SeqIO.parse(file, "fasta"))
-	protein_ids = []
-	protein_sequences = []
-	for protein in proteins:
-		protein_ids.append(protein.id)
-		protein_sequences.append(str(protein.seq))
-	return protein_ids, protein_sequences
 
 def match_modifications(peptide):
 	modified_peptide = peptide['peptide_sequence']
@@ -30,48 +20,23 @@ def match_modifications(peptide):
 
 	return modified_peptide
 
-def match_proteins(peptide, protein_ids, protein_sequences):
-	decoy = True
-	proteotypic = True
-	indices = [i for i, s in enumerate(protein_sequences) if peptide in s]
-
-	ids = []
-	for index in indices:
-		ids.append(protein_ids[index])
-
-	return ";".join(ids)
-
-def is_proteotypic(protein_id):
-	if ";" in protein_id:
-		return False
-	else:
-		return True
-
-def is_decoy(protein_id):
-	decoy = True
-	for protein in protein_id.split(";"):
-		if "DECOY" not in protein:
-			decoy = False
-	return decoy
-
 fragger_names = ['scan_id','precursor_neutral_mass','retention_time','precursor_charge','rank','peptide_sequence','upstream_aa','downstream_aa','protein_id','matched_fragments','total_matched_fragments','peptide_neutral_mass','mass_difference','number_tryptic_terminii','number_missed_cleavages','modifications','hyperscore','nextscore','intercept_em','slope_em']
 df = pd.read_table(sys.argv[1], header=None, names=fragger_names, index_col=False)
 
 # Generate UniMod peptide sequence
+print("Info: Matching modifications to UniMod.")
 df['modified_peptide'] = df[['peptide_sequence','modifications']].apply(match_modifications, axis=1)
 
 # Update protein identifiers and metadata
+print("Info: Matching peptides to proteins.")
 df = df.drop(columns = 'protein_id')
-protein_ids, protein_sequences = parse_fasta(sys.argv[2])
-peptides = list(df['peptide_sequence'].unique())
-# Find all protein identifiers
-protein_ids = list(map(lambda x: match_proteins(x, protein_ids, protein_sequences), peptides))
-# Assess proteotypicity
-proteotypic_flags = list(map(lambda x: is_proteotypic(x), protein_ids))
-# Assess decoys
-decoy_flags = list(map(lambda x: is_decoy(x), protein_ids))
-pepprotmap = pd.DataFrame({'peptide_sequence': peptides, 'protein_id': protein_ids, 'proteotypic': proteotypic_flags, 'decoy': decoy_flags})
-df = pd.merge(df, pepprotmap, on='peptide_sequence')
+peptide_index = pd.read_pickle(sys.argv[2])
+peptides_1 = df.shape[0]
+df = pd.merge(df, peptide_index, on='peptide_sequence')
+peptides_2 = df.shape[0]
+
+if peptides_1 != peptides_2:
+	sys.exit("Error: Peptides from PSMs (%s) don't match peptides after matching with FASTA (%s). Check digestion parameters." % (peptides_1, peptides_2))
 
 # Append PyProphet columns
 df['run_id'] = sys.argv[1]
