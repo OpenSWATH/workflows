@@ -64,16 +64,15 @@ def peptide_fdr(psms, peptide_fdr_threshold, plot_path):
   pi0_smooth_df = 3
   pi0_smooth_log_pi0 = False
   pfdr = False
-  psms['score'] = 1.0-psms['q_value']
 
-  peptides = psms.groupby(['modified_peptide','decoy'])['score'].max().reset_index()
+  peptides = psms.groupby(['modified_peptide','decoy'])['r_score'].max().reset_index()
   targets = peptides[~peptides['decoy']]
   decoys = peptides[peptides['decoy']]
 
-  targets['p_value'] = pemp(targets['score'], decoys['score'])
+  targets['p_value'] = pemp(targets['r_score'], decoys['r_score'])
   targets['q_value'] = qvalue(targets['p_value'], pi0est(targets['p_value'], pi0_lambda, pi0_method, pi0_smooth_df, pi0_smooth_log_pi0)['pi0'], pfdr)
 
-  plot(plot_path, "global peptide scores", targets['score'], decoys['score'])
+  plot(plot_path, "global peptide scores", targets['r_score'], decoys['r_score'])
   
   return targets[targets['q_value'] < peptide_fdr_threshold]['modified_peptide']
 
@@ -83,16 +82,15 @@ def protein_fdr(psms, protein_fdr_threshold, plot_path):
   pi0_smooth_df = 3
   pi0_smooth_log_pi0 = False
   pfdr = False
-  psms['score'] = 1.0-psms['q_value']
 
-  proteins = psms.groupby(['protein_id','decoy'])['score'].max().reset_index()
+  proteins = psms.groupby(['protein_id','decoy'])['r_score'].max().reset_index()
   targets = proteins[~proteins['decoy']]
   decoys = proteins[proteins['decoy']]
 
-  targets['p_value'] = pemp(targets['score'], decoys['score'])
+  targets['p_value'] = pemp(targets['r_score'], decoys['r_score'])
   targets['q_value'] = qvalue(targets['p_value'], pi0est(targets['p_value'], pi0_lambda, pi0_method, pi0_smooth_df, pi0_smooth_log_pi0)['pi0'], pfdr)
 
-  plot(plot_path, "global protein scores", targets['score'], decoys['score'])
+  plot(plot_path, "global protein scores", targets['r_score'], decoys['r_score'])
   
   return targets[targets['q_value'] < protein_fdr_threshold]['protein_id']
 

@@ -48,6 +48,7 @@ rule openswath:
         mzxml="data_dia/{run}.mzXML",
     output:
         osw="results/openswath/{run}.osw",
+    params:
         cache=temp(directory("/tmp/{run}/"))
     singularity:
         "develop.simg"
@@ -55,7 +56,7 @@ rule openswath:
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
     shell:
-        "OpenSwathWorkflow -in {input.mzxml} -tr data_library/library.pqp -tr_irt {input.irt_linear} -tr_irt_nonlinear {input.irt_nonlinear} -out_osw {output.osw} -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory {output.cache} -batchSize 1000 -ms1_isotopes 3" # -enable_uis_scoring
+        "OpenSwathWorkflow -in {input.mzxml} -tr data_library/library.pqp -tr_irt {input.irt_linear} -tr_irt_nonlinear {input.irt_nonlinear} -out_osw {output.osw} -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory {params.cache} -batchSize 1000 -ms1_isotopes 3" # -enable_uis_scoring
 
 rule pyprophet_model:
     input:
@@ -63,26 +64,28 @@ rule pyprophet_model:
     params:
         subsample_ratio = lambda wildcards, input: round(1.0/len(input),3)
     output:
-        "results/pyprophet/runspecific/model.osw",
+        osw = "results/pyprophet/runspecific/subsampled.osw",
+        ms1ms2 = "results/pyprophet/runspecific/subsampled_ms1ms2_model.bin",
     singularity:
         "develop.simg"
+    threads: 4
     shell:
-        "pyprophet merge --subsample_ratio={params.subsample_ratio} --out {output} {input} && "
-        "pyprophet score --in {output} --level=ms1ms2"
+        "pyprophet merge --subsample_ratio={params.subsample_ratio} --out {output.osw} {input} && "
+        "pyprophet score --classifier=XGBoost --in {output.osw} --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads}"
         # "pyprophet score --in {output} --level=ms1 && "
         # "pyprophet score --in {output} --level=transition"
 
 rule pyprophet_apply:
     input:
         osw = rules.openswath.output.osw,
-        model = rules.pyprophet_model.output
+        ms1ms2 = rules.pyprophet_model.output.ms1ms2
     output:
         osw = "results/pyprophet/runspecific/{run}.osw",
         oswr = "results/pyprophet/runspecific/{run}.oswr"
     singularity:
         "develop.simg"
     shell:
-        "pyprophet score --in {input.osw} --out {output.osw} --apply_weights {input.model} --level=ms1ms2 && "
+        "pyprophet score --in {input.osw} --out {output.osw} --apply_weights={input.ms1ms2} --level=ms1ms2 && "
         # "pyprophet score --in {output.osw} --apply_weights {input.model} --level=ms1 && "
         # "pyprophet score --in {output.osw} --apply_weights {input.model} --level=transition && "
         # "pyprophet ipf --no-ipf_ms1_scoring --in {output.osw} && "

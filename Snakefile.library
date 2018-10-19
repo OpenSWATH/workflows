@@ -84,15 +84,16 @@ rule pyprophet_learn:
     input:
         expand("results/library/{run}_pyprophet.tsv", run=run_ids),
     output:
-        "results/library/pyprophet_learn_weights.csv"
+        "results/library/pyprophet_learn_ms2_model.bin"
     params:
-        merged = "results/library/pyprophet_learn.tsv"
+        merged = "results/library/pyprophet_learn.tsv",
+        subsample_factor = 10
     singularity:
         "develop.simg"
     threads: 4
     shell:
-        "python3 scripts/pyprophet2subsample.py {params.merged} {input} && "
-        "pyprophet score --in {params.merged} --threads={threads} --ss_initial_fdr=0.02 --ss_iteration_fdr=0.01"
+        "python3 scripts/pyprophet2subsample.py {params.merged} {params.subsample_factor} {input} && "
+        "pyprophet score --in {params.merged} --threads={threads} --classifier=XGBoost --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001"
 
 rule pyprophet_score:
     input:
@@ -103,7 +104,7 @@ rule pyprophet_score:
     singularity:
         "develop.simg"
     shell:
-        "pyprophet score --in {input.pyprophet} --apply_weights={input.model}"
+        "pyprophet score --in {input.pyprophet} --classifier=XGBoost --apply_weights={input.model}"
 
 rule easypqp:
     input:

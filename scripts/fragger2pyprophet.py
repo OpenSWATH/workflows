@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import sys
+import os
 
 import pyopenms as po
 
@@ -39,11 +40,24 @@ if peptides_1 != peptides_2:
 	sys.exit("Error: Peptides from PSMs (%s) don't match peptides after matching with FASTA (%s). Check digestion parameters." % (peptides_1, peptides_2))
 
 # Append PyProphet columns
-df['run_id'] = sys.argv[1]
+run_id = os.path.splitext(os.path.basename(sys.argv[1]))[0]
+df['run_id'] = run_id
 df['group_id'] = df['run_id'] + "_" + df['scan_id'].astype(str)
 df['expect'] = np.power(10,(df['intercept_em'] + (df['hyperscore'] * df['slope_em'])))
 df['var_expectscore'] = 0.0 - np.log(df['expect'])
 df['var_deltascore'] = 1.0 - (df['nextscore'] / df['hyperscore'])
 df['var_lengthscore'] = np.sqrt(df['peptide_sequence'].str.len())
+df['var_charge'] = df['precursor_charge']
+
+# DIA-Umpire quality tiers
+if run_id.endswith("_Q1"):
+	df['var_quality'] = 1
+elif run_id.endswith("_Q2"):
+	df['var_quality'] = 2
+elif run_id.endswith("_Q3"):
+	df['var_quality'] = 3
+else: # DDA data
+	df['var_quality'] = 0
+
 df = df.rename(index=str, columns={'hyperscore': 'main_var_hyperscore'})
 df.to_csv(sys.argv[3], sep="\t", index=False)
