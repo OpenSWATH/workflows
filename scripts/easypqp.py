@@ -192,7 +192,7 @@ psms = pd.concat(psms_list).reset_index(drop=True)
 pepid = process_psms(psms, psm_fdr_threshold, peptide_fdr_threshold, protein_fdr_threshold, sys.argv[4], sys.argv[5])
 
 # Generate set of best replicate identifications per run
-pepidr = pepid.loc[pepid.groupby(['base_name','modified_peptide','precursor_charge'])['pep'].idxmin()].sort_index()
+pepidr = pepid.loc[pepid.groupby(['base_name','modified_peptide','precursor_charge'])['r_score'].idxmax()].sort_index()
 
 # Select reference run
 pepidr_stats = pepidr.groupby('base_name')[['modified_peptide']].count().reset_index()
@@ -211,7 +211,7 @@ aligned_runs = align_runs.groupby('base_name').apply(lambda x: lowess(x, referen
 pepida = pd.concat([reference_run, aligned_runs]).reset_index(drop=True)
 
 # Generate set of non-redundant global best replicate identifications
-pepidb = pepida.loc[pepida.groupby(['modified_peptide','precursor_charge'])['pep'].idxmin()].sort_index()
+pepidb = pepida.loc[pepida.groupby(['modified_peptide','precursor_charge'])['r_score'].idxmax()].sort_index()
 
 # Prepare ID mzML pairing
 peak_files = pd.DataFrame({'path': mzxmls})
