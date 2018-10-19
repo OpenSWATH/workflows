@@ -16,47 +16,98 @@ from pyprophet.stats import pemp, qvalue, pi0est
 # mzXML parsing
 import pyopenms as po
 
-def peptide_fdr(psms, peptide_fdr_threshold):
+# plotting
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    from matplotlib.backends.backend_pdf import PdfPages
+    import matplotlib.pyplot as plt
+except ImportError:
+    plt = None
+from scipy.stats import gaussian_kde
+from numpy import linspace, concatenate
+
+def plot(path, title, targets, decoys):
+  plt.figure(figsize=(10, 5))
+  plt.subplots_adjust(hspace=.5)
+
+  plt.subplot(121)
+  plt.title("group score distributions")
+  plt.xlabel("score")
+  plt.ylabel("# of groups")
+  plt.hist(
+      [targets, decoys], 20, color=['g', 'r'], label=['target', 'decoy'], histtype='bar')
+  plt.legend(loc=2)
+
+  plt.subplot(122)
+  tdensity = gaussian_kde(targets)
+  tdensity.covariance_factor = lambda: .25
+  tdensity._compute_covariance()
+  ddensity = gaussian_kde(decoys)
+  ddensity.covariance_factor = lambda: .25
+  ddensity._compute_covariance()
+  xs = linspace(min(concatenate((targets, decoys))), max(
+      concatenate((targets, decoys))), 200)
+  plt.title("group score densities")
+  plt.xlabel("score")
+  plt.ylabel("density")
+  plt.plot(xs, tdensity(xs), color='g', label='target')
+  plt.plot(xs, ddensity(xs), color='r', label='decoy')
+  plt.legend(loc=2)
+
+  plt.suptitle(title)
+  plt.savefig(path)
+
+def peptide_fdr(psms, peptide_fdr_threshold, plot_path):
   pi0_lambda = np.arange(0.05, 0.5, 0.05)
   pi0_method = 'bootstrap'
   pi0_smooth_df = 3
   pi0_smooth_log_pi0 = False
   pfdr = False
+  psms['score'] = 1.0-psms['q_value']
 
-  peptides = psms.groupby(['modified_peptide','decoy'])['d_score'].max().reset_index()
+  peptides = psms.groupby(['modified_peptide','decoy'])['score'].max().reset_index()
   targets = peptides[~peptides['decoy']]
   decoys = peptides[peptides['decoy']]
 
-  targets['p_value'] = pemp(targets['d_score'], decoys['d_score'])
+  targets['p_value'] = pemp(targets['score'], decoys['score'])
   targets['q_value'] = qvalue(targets['p_value'], pi0est(targets['p_value'], pi0_lambda, pi0_method, pi0_smooth_df, pi0_smooth_log_pi0)['pi0'], pfdr)
+
+  plot(plot_path, "global peptide scores", targets['score'], decoys['score'])
   
   return targets[targets['q_value'] < peptide_fdr_threshold]['modified_peptide']
 
-def protein_fdr(psms, protein_fdr_threshold):
+def protein_fdr(psms, protein_fdr_threshold, plot_path):
   pi0_lambda = np.arange(0.05, 0.5, 0.05)
   pi0_method = 'bootstrap'
   pi0_smooth_df = 3
   pi0_smooth_log_pi0 = False
   pfdr = False
+  psms['score'] = 1.0-psms['q_value']
 
-  proteins = psms.groupby(['protein_id','decoy'])['d_score'].max().reset_index()
+  proteins = psms.groupby(['protein_id','decoy'])['score'].max().reset_index()
   targets = proteins[~proteins['decoy']]
   decoys = proteins[proteins['decoy']]
 
-  targets['p_value'] = pemp(targets['d_score'], decoys['d_score'])
+  targets['p_value'] = pemp(targets['score'], decoys['score'])
   targets['q_value'] = qvalue(targets['p_value'], pi0est(targets['p_value'], pi0_lambda, pi0_method, pi0_smooth_df, pi0_smooth_log_pi0)['pi0'], pfdr)
+
+  plot(plot_path, "global protein scores", targets['score'], decoys['score'])
   
   return targets[targets['q_value'] < protein_fdr_threshold]['protein_id']
 
-def read_psm(psm_path, psm_fdr_threshold, peptide_fdr_threshold, protein_fdr_threshold):
-  psms = pd.read_table(psm_path, index_col=False)
-
+def process_psms(psms, psm_fdr_threshold, peptide_fdr_threshold, protein_fdr_threshold, peptide_plot_path, protein_plot_path):
   # Only keep proteotypic peptides
   psms = psms[psms['proteotypic']]
 
+  # Prefilter PSMs
+  psms = psms[psms['q_value'] < 0.1]
+
   # Confident peptides and protein in global context
-  peptides = peptide_fdr(psms, peptide_fdr_threshold)
-  proteins = protein_fdr(psms, protein_fdr_threshold)
+  peptides = peptide_fdr(psms, peptide_fdr_threshold, peptide_plot_path)
+  print("Info: %s modified peptides identified (q-value < %s)" % (len(peptides), peptide_fdr_threshold))
+  proteins = protein_fdr(psms, protein_fdr_threshold, protein_plot_path)
+  print("Info: %s proteins identified (q-value < %s)" % (len(proteins), protein_fdr_threshold))
 
   # Filter peptides and proteins
   psms = psms[psms['modified_peptide'].isin(peptides)]
@@ -67,6 +118,8 @@ def read_psm(psm_path, psm_fdr_threshold, peptide_fdr_threshold, protein_fdr_thr
 
   # Remove decoys
   psms = psms[~psms['decoy']]
+
+  print("Info: %s redundant PSMs identified (q-value < %s)" % (psms.shape[0], psm_fdr_threshold))
 
   # Append columns
   psms['base_name'] = psms['run_id'].apply(lambda x: os.path.splitext(os.path.basename(x))[0])
@@ -111,29 +164,34 @@ def read_mzxml(mzxml_path, scan_ids):
     peaks['scan_id'] = scan_id
     peaks_list.append(peaks)
 
-  transitions = pd.concat(peaks_list)
+  if len(peaks_list) > 0:
+    transitions = pd.concat(peaks_list)
+  else:
+    transitions = pd.DataFrame({'product_mz': [], 'precursor_mz': [], 'intensity': [], 'scan_id': [], })
   return(transitions)
 
 # Parse input arguments
-psms = []
+psm_files = []
 mzxmls = []
 psm_fdr_threshold = float(sys.argv[1])
 peptide_fdr_threshold = float(sys.argv[2])
 protein_fdr_threshold = float(sys.argv[3])
 
-for arg in sys.argv[4:]:
+for arg in sys.argv[6:]:
   if 'pyprophet' in arg:
-    psms.append(arg)
+    psm_files.append(arg)
   if 'mzXML' in arg:
     mzxmls.append(arg)
 
-# Parse all pepXML files
-pepid_list = []
-for psm in psms:
-  print("Reading file %s." % psm)
-  pepid_file = read_psm(psm, psm_fdr_threshold, peptide_fdr_threshold, protein_fdr_threshold)
-  pepid_list.append(pepid_file)
-pepid = pd.concat(pepid_list).reset_index(drop=True)
+# Read all PSM files
+psms_list = []
+for psm_file in psm_files:
+  print("Reading file %s." % psm_file)
+  psms_list.append(pd.read_table(psm_file, index_col=False))
+psms = pd.concat(psms_list).reset_index(drop=True)
+
+# Process PSMs
+pepid = process_psms(psms, psm_fdr_threshold, peptide_fdr_threshold, protein_fdr_threshold, sys.argv[4], sys.argv[5])
 
 # Generate set of best replicate identifications per run
 pepidr = pepid.loc[pepid.groupby(['base_name','modified_peptide','precursor_charge'])['pep'].idxmin()].sort_index()

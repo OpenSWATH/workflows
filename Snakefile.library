@@ -80,26 +80,38 @@ rule msfragger_convert:
     shell:
         "python3 scripts/fragger2pyprophet.py {input.psms} {input.fasta} {output}"
 
-rule pyprophet:
+rule pyprophet_learn:
     input:
         expand("results/library/{run}_pyprophet.tsv", run=run_ids),
     output:
-        "results/library/pyprophet_psms_scored.tsv"
+        "results/library/pyprophet_learn_weights.csv"
     params:
-        merged = "results/library/pyprophet_psms.tsv"
+        merged = "results/library/pyprophet_learn.tsv"
     singularity:
         "develop.simg"
     threads: 4
     shell:
-        "awk 'BEGIN {{ FS=\"\t\"; OFS=\"\t\" }} FNR>1 || NR==1 {{print $0}}' {input} > {params.merged} && "
-        "pyprophet score --in {params.merged} --threads={threads}"
+        "python3 scripts/pyprophet2subsample.py {params.merged} {input} && "
+        "pyprophet score --in {params.merged} --threads={threads} --ss_initial_fdr=0.02 --ss_iteration_fdr=0.01"
+
+rule pyprophet_score:
+    input:
+        pyprophet =rules.msfragger_convert.output,
+        model = rules.pyprophet_learn.output
+    output:
+        "results/library/{run}_pyprophet_scored.tsv"
+    singularity:
+        "develop.simg"
+    shell:
+        "pyprophet score --in {input.pyprophet} --apply_weights={input.model}"
 
 rule easypqp:
     input:
-        psms = rules.pyprophet.output,
+        psms = expand("results/library/{run}_pyprophet_scored.tsv", run=run_ids),
         mzxml = expand("results/library/{run}.mzXML", run=run_ids),
     output:
-        temp(touch("easypqp.done"))
+        peptide_plot = "results/library/pyprophet_peptides.pdf",
+        protein_plot = "results/library/pyprophet_protein.pdf",
     singularity:
         "develop.simg"
     params:
@@ -107,13 +119,13 @@ rule easypqp:
         peptide_fdr_threshold = 0.01,
         protein_fdr_threshold = 0.01
     shell:
-        "python3 scripts/easypqp.py {params.psm_fdr_threshold} {params.peptide_fdr_threshold} {params.protein_fdr_threshold} {input.psms} {input.mzxml}"
+        "python3 scripts/easypqp.py {params.psm_fdr_threshold} {params.peptide_fdr_threshold} {params.protein_fdr_threshold} {output.peptide_plot} {output.protein_plot} {input.psms} {input.mzxml}"
 
 rule global_target_pqp:
     input:
-        iRT = "easypqp.done"
+        iRT = rules.easypqp.output
     params:
-        peaks = "results/library/{run}_global_peaks.tsv"
+        peaks = temp("results/library/{run}_global_peaks.tsv")
     output:
         temp("results/library/{run}_global_pqp.tsv")
     singularity:
