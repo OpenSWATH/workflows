@@ -49,7 +49,7 @@ rule openswath:
     output:
         osw="results/openswath/{run}.osw"
     params:
-        cache="/tmp/{run}/")
+        cache="/tmp/{run}/"
     singularity:
         "develop.simg"
     threads: 4
