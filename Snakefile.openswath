@@ -87,7 +87,7 @@ rule pyprophet_apply:
     singularity:
         "develop.simg"
     shell:
-        "pyprophet score --in {input.osw} --out {output.osw} --apply_weights={input.ms1ms2} --level=ms1ms2 && "
+        "pyprophet score --in {input.osw} --out {output.osw} --classifier=XGBoost --apply_weights={input.ms1ms2} --level=ms1ms2 && "
         # "pyprophet score --in {output.osw} --apply_weights {input.model} --level=ms1 && "
         # "pyprophet score --in {output.osw} --apply_weights {input.model} --level=transition && "
         # "pyprophet ipf --no-ipf_ms1_scoring --in {output.osw} && "
