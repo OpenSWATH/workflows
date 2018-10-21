@@ -95,7 +95,7 @@ rule pyprophet_apply:
 
 rule pyprophet_global:
     input:
-        template = rules.pyprophet_model.output,
+        template = rules.pyprophet_model.output.osw,
         oswr = expand("results/pyprophet/runspecific/{run}.oswr", run=run_ids)
     output:
         "results/pyprophet/global/model.oswr"
