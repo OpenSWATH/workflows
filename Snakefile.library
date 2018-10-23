@@ -50,7 +50,7 @@ rule msfragger_index:
         "develop.simg"
     threads: 4
     resources:
-        mem_mb=lambda wildcards, attempt: attempt * 8192
+        mem_mb=lambda wildcards, attempt: (attempt * 16384) - 2048
     shell:
         "java -Xmx{resources.mem_mb}M -jar MSFragger-20180316.jar params/fragger.params {input.mzxml}"
 
@@ -65,7 +65,7 @@ rule msfragger_search:
         "develop.simg"
     threads: 4
     resources:
-        mem_mb=lambda wildcards, attempt: attempt * 8192
+        mem_mb=lambda wildcards, attempt: (attempt * 16384) - 2048
     shell:
         "java -Xmx{resources.mem_mb}M -jar MSFragger-20180316.jar params/fragger.params {input.mzxml}"
 
@@ -126,13 +126,15 @@ rule global_target_pqp:
     input:
         iRT = rules.easypqp.output
     params:
+        unimod = "params/unimod_phospho.xml",
         peaks = temp("results/library/{run}_global_peaks.tsv")
     output:
         temp("results/library/{run}_global_pqp.tsv")
     singularity:
         "develop.simg"
     shell:
-        "OpenSwathAssayGenerator -in {params.peaks} -out {output}"
+        #"OpenSwathAssayGenerator -in {params.peaks} -out {output}"
+        "OpenSwathAssayGenerator -in {params.peaks} -out {output} -enable_ipf -unimod_file {params.unimod} -disable_identification_ms2_precursors -disable_identification_specific_losses"
 
 rule global_combined_pqp:
     input:

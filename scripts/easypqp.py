@@ -1,3 +1,11 @@
+# plotting
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+except ImportError:
+    plt = None
+
 import sys
 import os
 import re
@@ -16,14 +24,6 @@ from pyprophet.stats import pemp, qvalue, pi0est
 # mzXML parsing
 import pyopenms as po
 
-# plotting
-try:
-    import matplotlib
-    matplotlib.use('Agg')
-    from matplotlib.backends.backend_pdf import PdfPages
-    import matplotlib.pyplot as plt
-except ImportError:
-    plt = None
 from scipy.stats import gaussian_kde
 from numpy import linspace, concatenate
 

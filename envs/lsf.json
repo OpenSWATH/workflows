@@ -14,9 +14,28 @@
 	"nCPUs"     : "4"
     },
 
-    "msfragger" :
+    "msfragger_index" :
     {
+	"memory"    : 16384,
 	"nCPUs"     : "4"
+    },
+
+    "msfragger_search" :
+    {
+        "memory"    : 16384,
+        "nCPUs"     : "4"
+    },
+
+    "pyprophet_learn" :
+    {
+        "memory"    : 16384,
+        "nCPUs"     : "4"
+    },
+
+    "easypqp" :
+    {
+        "memory"    : 16384,
+        "nCPUs"     : "2"
     },
 
     "openswath" :
