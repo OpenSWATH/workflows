@@ -16,7 +16,17 @@ class unimod:
 		tree = ET.parse(self.unimod_file)
 		root = tree.getroot()
 
-		ptms = []
+		ptms = {}
+		sites = ['A','R','N','D','C','E','Q','G','H','O','I','L','K','M','F','P','U','S','T','W','Y','V']
+		positions = ['Anywhere','Any N-term','Any C-term','Protein N-term','Protein C-term']
+
+		for site in sites:
+			ptms[site] = {}
+
+		for position in positions:
+			for site in sites:
+				ptms[site][position] = {}
+		
 		for modifications in root.findall('.//umod:modifications', namespaces):
 			for modification in modifications.findall('.//umod:mod', namespaces):
 				sites = []
@@ -24,21 +34,13 @@ class unimod:
 				for specificity in modification.findall('.//umod:specificity', namespaces):
 					sites.append(specificity.attrib['site'])
 					positions.append(specificity.attrib['position'])
-				ptms.append(pd.DataFrame({'title': modification.attrib['title'], 'record_id': int(modification.attrib['record_id']), 'site': sites, 'position': positions, 'delta_mass': float(modification.findall('.//umod:delta', namespaces)[0].attrib['mono_mass'])}))
+					ptms[specificity.attrib['site']][specificity.attrib['position']][int(modification.attrib['record_id'])] = float(modification.findall('.//umod:delta', namespaces)[0].attrib['mono_mass'])
 
-		ptms = pd.concat(ptms)
 		return ptms
 
 	def get_id(self, site, position, delta_mass):
-		candidates = self.ptms[(self.ptms['site'] == site) & (self.ptms['position'] == position)]
-		candidates.loc[:,('delta_match')] = (candidates['delta_mass'] - delta_mass).abs()
-		hits = candidates.sort_values("delta_match")
-
-		if hits.shape[0] > 0:
-			hit = hits['record_id'][0]
-		else:
-			hit = -1
-		return hit
+		candidates = self.ptms[site][position]
+		candidates.get(delta_mass, data[min(candidates.values(), key=lambda k: abs(k-delta_mass))])
 
 def match_modifications(peptide):
 	modified_peptide = peptide['peptide_sequence']
