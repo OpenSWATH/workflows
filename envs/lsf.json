@@ -38,6 +38,12 @@
         "nCPUs"     : "2"
     },
 
+    "global_combined_decoy_pqp" :
+    {
+        "memory"    : 16384,
+        "nCPUs"     : "4"
+    },
+
     "openswath" :
     {
         "nCPUs"     : "4"

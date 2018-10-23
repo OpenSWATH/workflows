@@ -140,4 +140,6 @@ rule global_combined_decoy_pqp:
     singularity:
         "develop.simg"
     shell:
-        "OpenSwathDecoyGenerator -in {input} -out {output}"
+        "cache=${{TMPDIR-/tmp/}} && "
+        "OpenSwathDecoyGenerator -in {input} -out $cache/library.pqp && mv $cache/library.pqp {output}"
+
