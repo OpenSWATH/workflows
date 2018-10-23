@@ -3,11 +3,42 @@ import pandas as pd
 import sys
 import os
 
-import pyopenms as po
+import xml.etree.ElementTree as ET
 
-mdb = po.ModificationsDB()
+class unimod:
+	def __init__(self, unimod_file):
+		self.unimod_file = unimod_file
+		self.ptms = self.parse_unimod()
 
-mdb.readFromUnimodXMLFile(sys.argv[1])
+	def parse_unimod(self):
+		namespaces = {'umod': "http://www.unimod.org/xmlns/schema/unimod_2"}
+		ET.register_namespace('', "http://www.unimod.org/xmlns/schema/unimod_2")
+		tree = ET.parse(self.unimod_file)
+		root = tree.getroot()
+
+		ptms = []
+		for modifications in root.findall('.//umod:modifications', namespaces):
+			for modification in modifications.findall('.//umod:mod', namespaces):
+				sites = []
+				positions = []
+				for specificity in modification.findall('.//umod:specificity', namespaces):
+					sites.append(specificity.attrib['site'])
+					positions.append(specificity.attrib['position'])
+				ptms.append(pd.DataFrame({'title': modification.attrib['title'], 'record_id': int(modification.attrib['record_id']), 'site': sites, 'position': positions, 'delta_mass': float(modification.findall('.//umod:delta', namespaces)[0].attrib['mono_mass'])}))
+
+		ptms = pd.concat(ptms)
+		return ptms
+
+	def get_id(self, site, position, delta_mass):
+		candidates = self.ptms[(self.ptms['site'] == site) & (self.ptms['position'] == position)]
+		candidates.loc[:,('delta_match')] = (candidates['delta_mass'] - delta_mass).abs()
+		hits = candidates.sort_values("delta_match")
+
+		if hits.shape[0] > 0:
+			hit = hits['record_id'][0]
+		else:
+			hit = -1
+		return hit
 
 def match_modifications(peptide):
 	modified_peptide = peptide['peptide_sequence']
@@ -18,17 +49,20 @@ def match_modifications(peptide):
 			modifications[int(site)] = float(mass)
 
 		for site in sorted(modifications, reverse=True):
-			rm = mdb.getBestModificationByDiffMonoMass(modifications[site], 0.05, peptide['peptide_sequence'][site], po.ResidueModification.TermSpecificity.ANYWHERE)
+			record_id = um.get_id(peptide['peptide_sequence'][site], 'Anywhere', modifications[site])
 
-			if rm.getUniModRecordId() == -1:
+			if record_id == -1:
 				sys.exit("Error: Could not annotate site %s (%s) from peptide %s with delta mass %s." % (site+1, peptide['peptide_sequence'][site], peptide['peptide_sequence'], modifications[site]))
 
-			modified_peptide = modified_peptide[:site+1] + "(UniMod:" + str(rm.getUniModRecordId()) + ")" + modified_peptide[site+1:]
+			modified_peptide = modified_peptide[:site+1] + "(UniMod:" + str(record_id) + ")" + modified_peptide[site+1:]
 
 	return modified_peptide
 
 fragger_names = ['scan_id','precursor_neutral_mass','retention_time','precursor_charge','rank','peptide_sequence','upstream_aa','downstream_aa','protein_id','matched_fragments','total_matched_fragments','peptide_neutral_mass','mass_difference','number_tryptic_terminii','number_missed_cleavages','modifications','hyperscore','nextscore','intercept_em','slope_em']
 df = pd.read_table(sys.argv[2], header=None, names=fragger_names, index_col=False)
+
+# Initialize UniMod
+um = unimod(sys.argv[1])
 
 # Generate UniMod peptide sequence
 print("Info: Matching modifications to UniMod.")
