@@ -29,16 +29,6 @@ rule digestdb:
         "Digestor -in {input} -out {params.peptides} -missed_cleavages 1 -min_length 7 -max_length 50 -enzyme Trypsin && "
         "python3 scripts/fasta2index.py {params.peptides} {output}"
 
-rule spectra_link:
-    input:
-        "data_dda/{run}.mzXML"
-    output:
-        "results/library/{run}.mzXML"
-    singularity:
-        "develop.simg"
-    shell:
-        "ln {input} {output}"
-
 rule msfragger_index:
     input:
         fasta = rules.decoydb.output,
@@ -57,28 +47,26 @@ rule msfragger_index:
 rule msfragger_search:
     input:
         fasta = rules.decoydb.output,
+        peptides = rules.digestdb.output,
         index = rules.msfragger_index.output.index,
-        mzxml = rules.spectra_link.output
+        mzxml = "data_dda/{run}.mzXML"
     output:
-        "results/library/{run}.tsv"
+        cache = temp("results/library/{run}.mzXML"),
+        fragger = "results/library/{run}.tsv",
+        pyprophet = "results/library/{run}_pyprophet.tsv",
+        peakpkl = "results/library/{run}.peakpkl"
+    params:
+        fragger = "params/fragger.params",
+        unimod = "params/unimod_phospho.xml"
     singularity:
         "develop.simg"
     threads: 4
     resources:
         mem_mb=lambda wildcards, attempt: (attempt * 16384) - 2048
     shell:
-        "java -Xmx{resources.mem_mb}M -jar MSFragger-20180316.jar params/fragger.params {input.mzxml}"
-
-rule msfragger_convert:
-    input:
-        fasta = rules.digestdb.output,
-        psms = rules.msfragger_search.output
-    output:
-        "results/library/{run}_pyprophet.tsv"
-    singularity:
-        "develop.simg"
-    shell:
-        "python3 scripts/fragger2pyprophet.py {input.psms} {input.fasta} {output}"
+        "ln {input.mzxml} {output.cache} && "
+        "java -Xmx{resources.mem_mb}M -jar MSFragger-20180316.jar {params.fragger} {output.cache} && "
+        "python3 scripts/fragger2pyprophet.py {params.unimod} {output.fragger} {input.peptides} {output.pyprophet} {input.mzxml} {output.peakpkl}"
 
 rule pyprophet_learn:
     input:
@@ -97,7 +85,7 @@ rule pyprophet_learn:
 
 rule pyprophet_score:
     input:
-        pyprophet =rules.msfragger_convert.output,
+        pyprophet =rules.msfragger_search.output.pyprophet,
         model = rules.pyprophet_learn.output
     output:
         "results/library/{run}_pyprophet_scored.tsv"
@@ -109,7 +97,7 @@ rule pyprophet_score:
 rule easypqp:
     input:
         psms = expand("results/library/{run}_pyprophet_scored.tsv", run=run_ids),
-        mzxml = expand("results/library/{run}.mzXML", run=run_ids),
+        peakpkl = expand("results/library/{run}.peakpkl", run=run_ids),
     output:
         peptide_plot = "results/library/pyprophet_peptides.pdf",
         protein_plot = "results/library/pyprophet_protein.pdf",
@@ -120,7 +108,7 @@ rule easypqp:
         peptide_fdr_threshold = 0.01,
         protein_fdr_threshold = 0.01
     shell:
-        "python3 scripts/easypqp.py {params.psm_fdr_threshold} {params.peptide_fdr_threshold} {params.protein_fdr_threshold} {output.peptide_plot} {output.protein_plot} {input.psms} {input.mzxml}"
+        "python3 scripts/easypqp.py {params.psm_fdr_threshold} {params.peptide_fdr_threshold} {params.protein_fdr_threshold} {output.peptide_plot} {output.protein_plot} {input.psms} {input.peakpkl}"
 
 rule global_target_pqp:
     input:

@@ -21,9 +21,7 @@ from scipy.interpolate import interp1d
 # error rate estimation
 from pyprophet.stats import pemp, qvalue, pi0est
 
-# mzXML parsing
-import pyopenms as po
-
+# plotting
 from scipy.stats import gaussian_kde
 from numpy import linspace, concatenate
 
@@ -140,37 +138,9 @@ def lowess(run, reference_run):
 
   return run
 
-def read_mzxml(mzxml_path, scan_ids):
-  fh = po.MzXMLFile()
-  fh.setLogType(po.LogType.CMD)
-  input_map = po.MSExperiment()
-  fh.load(mzxml_path, input_map)
-
-  peaks_list = []
-  for scan_id in scan_ids:
-
-    spectrum = input_map.getSpectrum(scan_id - 1)
-
-    product_mzs = []
-    intensities = []
-    for peak in spectrum:
-      product_mzs.append(peak.getMZ())
-      intensities.append(peak.getIntensity())
-
-    peaks = pd.DataFrame({'product_mz': product_mzs, 'intensity': intensities})
-    peaks['precursor_mz'] = spectrum.getPrecursors()[0].getMZ()
-    peaks['scan_id'] = scan_id
-    peaks_list.append(peaks)
-
-  if len(peaks_list) > 0:
-    transitions = pd.concat(peaks_list)
-  else:
-    transitions = pd.DataFrame({'product_mz': [], 'precursor_mz': [], 'intensity': [], 'scan_id': [], })
-  return(transitions)
-
 # Parse input arguments
 psm_files = []
-mzxmls = []
+spectra = []
 psm_fdr_threshold = float(sys.argv[1])
 peptide_fdr_threshold = float(sys.argv[2])
 protein_fdr_threshold = float(sys.argv[3])
@@ -178,8 +148,8 @@ protein_fdr_threshold = float(sys.argv[3])
 for arg in sys.argv[6:]:
   if 'pyprophet' in arg:
     psm_files.append(arg)
-  if 'mzXML' in arg:
-    mzxmls.append(arg)
+  if 'peakpkl' in arg:
+    spectra.append(arg)
 
 # Read all PSM files
 psms_list = []
@@ -214,7 +184,7 @@ pepida = pd.concat([reference_run, aligned_runs]).reset_index(drop=True)
 pepidb = pepida.loc[pepida.groupby(['modified_peptide','precursor_charge'])['r_score'].idxmax()].sort_index()
 
 # Prepare ID mzML pairing
-peak_files = pd.DataFrame({'path': mzxmls})
+peak_files = pd.DataFrame({'path': spectra})
 peak_files['base_name'] = peak_files['path'].apply(lambda x: os.path.splitext(os.path.basename(x))[0])
 
 # Parse mzXML to retrieve peaks and store results in peak files
@@ -222,7 +192,7 @@ for idx, peak_file in peak_files.iterrows():
   print("Parsing file %s." % peak_file['path'])
   meta_run = pepida[pepida['base_name'] == peak_file['base_name']]
   meta_global = pepidb[pepidb['base_name'] == peak_file['base_name']]
-  peaks = read_mzxml(peak_file['path'], meta_run['scan_id'].tolist())
+  peaks = pd.read_pickle(peak_file['path'])
   
   # Generate run-specific PQP files for OpenSWATH alignment
   if "_Q1" in peak_file['base_name']:

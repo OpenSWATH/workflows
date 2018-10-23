@@ -3,7 +3,11 @@ import pandas as pd
 import sys
 import os
 
+# Unimod parsing
 import xml.etree.ElementTree as ET
+
+# mzXML parsing
+import pyopenms as po
 
 class unimod:
 	def __init__(self, unimod_file):
@@ -61,6 +65,34 @@ def match_modifications(peptide):
 
 	return modified_peptide
 
+def read_mzxml(mzxml_path, scan_ids):
+	fh = po.MzXMLFile()
+	fh.setLogType(po.LogType.CMD)
+	input_map = po.MSExperiment()
+	fh.load(mzxml_path, input_map)
+
+	peaks_list = []
+	for scan_id in scan_ids:
+
+		spectrum = input_map.getSpectrum(scan_id - 1)
+
+		product_mzs = []
+		intensities = []
+		for peak in spectrum:
+			product_mzs.append(peak.getMZ())
+			intensities.append(peak.getIntensity())
+
+		peaks = pd.DataFrame({'product_mz': product_mzs, 'intensity': intensities})
+		peaks['precursor_mz'] = spectrum.getPrecursors()[0].getMZ()
+		peaks['scan_id'] = scan_id
+		peaks_list.append(peaks)
+
+	if len(peaks_list) > 0:
+		transitions = pd.concat(peaks_list)
+	else:
+		transitions = pd.DataFrame({'product_mz': [], 'precursor_mz': [], 'intensity': [], 'scan_id': [], })
+	return(transitions)
+
 fragger_names = ['scan_id','precursor_neutral_mass','retention_time','precursor_charge','rank','peptide_sequence','upstream_aa','downstream_aa','protein_id','matched_fragments','total_matched_fragments','peptide_neutral_mass','mass_difference','number_tryptic_terminii','number_missed_cleavages','modifications','hyperscore','nextscore','intercept_em','slope_em']
 df = pd.read_table(sys.argv[2], header=None, names=fragger_names, index_col=False)
 
@@ -104,3 +136,9 @@ else: # DDA data
 
 df = df.rename(index=str, columns={'hyperscore': 'main_var_hyperscore'})
 df.to_csv(sys.argv[4], sep="\t", index=False)
+
+# Generate spectrum dataframe
+print("Info: Processing spectra from file %s." % sys.argv[5])
+peaks = read_mzxml(sys.argv[5], df['scan_id'].unique().tolist())
+peaks.to_pickle(sys.argv[6])
+
