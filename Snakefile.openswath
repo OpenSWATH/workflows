@@ -13,7 +13,10 @@ rule run_target_pqp:
     singularity:
         "develop.simg"
     shell:
-        "OpenSwathAssayGenerator -in {input} -out {output}"
+        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "OpenSwathAssayGenerator -in {input} -out $cache/$(basename {output}) && "
+        "mv $cache/$(basename {output}) {output} && "
+        "rm -rf $cache"
 
 rule irt_filter_pqp:
     input:
@@ -25,8 +28,12 @@ rule irt_filter_pqp:
         "results/openswath/irt_{run}.pqp"
     singularity:
         "develop.simg"
-    script:
-        "scripts/hrirt.R"
+    shell:
+        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cp {input} $cache/$(basename {input}) && "
+        "Rscript scripts/hrirt.R $cache/$(basename {input}) $cache/$(basename {output}) {params.bins} {params.peptides} && "
+        "mv $cache/$(basename {output}) {output} && "
+        "rm -rf $cache"
 
 rule irt_nonlinear_filter_pqp:
     input:
@@ -38,27 +45,34 @@ rule irt_nonlinear_filter_pqp:
         "results/openswath/irt_nonlinear_{run}.pqp"
     singularity:
         "develop.simg"
-    script:
-        "scripts/hrirt.R"
+    shell:
+        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cp {input} $cache/$(basename {input}) && "
+        "Rscript scripts/hrirt.R $cache/$(basename {input}) $cache/$(basename {output}) {params.bins} {params.peptides} && "
+        "mv $cache/$(basename {output}) {output} && "
+        "rm -rf $cache"
 
 rule openswath:
     input:
+        pqp="data_library/library.pqp",
         irt_linear=rules.irt_filter_pqp.output,
         irt_nonlinear=rules.irt_nonlinear_filter_pqp.output,
         mzxml="data_dia/{run}.mzXML",
     output:
         osw="results/openswath/{run}.osw"
     params:
-        cache="/tmp/{run}/"
+        run="{run}"
     singularity:
         "develop.simg"
     threads: 4
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
     shell:
-        "mkdir -p {params.cache} && "
-        "OpenSwathWorkflow -in {input.mzxml} -tr data_library/library.pqp -tr_irt {input.irt_linear} -tr_irt_nonlinear {input.irt_nonlinear} -out_osw {output.osw} -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory {params.cache} -batchSize 1000 -ms1_isotopes 3 -enable_uis_scoring && "
-        "rm -rf {params.cache}"
+        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cp {input.pqp} $cache/$(basename {input.pqp}) && cp {input.irt_linear} $cache/$(basename {input.irt_linear}) && cp {input.irt_nonlinear} $cache/$(basename {input.irt_nonlinear}) && "
+        "OpenSwathWorkflow -in {input.mzxml} -tr $cache/$(basename {input.pqp}) -tr_irt $cache/$(basename {input.irt_linear}) -tr_irt_nonlinear $cache/$(basename {input.irt_nonlinear}) -out_osw $cache/$(basename {output.osw}) -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory $cache -batchSize 1000 -ms1_isotopes 3 -enable_uis_scoring && "
+        "mv $cache/$(basename {output.osw}) {output.osw} && "
+        "rm -rf $cache"
 
 rule pyprophet_model:
     input:
@@ -74,26 +88,40 @@ rule pyprophet_model:
         "develop.simg"
     threads: 4
     shell:
-        "pyprophet merge --subsample_ratio={params.subsample_ratio} --out {output.osw} {input} && "
-        "pyprophet score --classifier=XGBoost --in {output.osw} --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
-        "pyprophet score --classifier=XGBoost --in {output.osw} --level=ms1 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
-        "pyprophet score --classifier=XGBoost --in {output.osw} --level=transition --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads}"
+        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cp {input} $cache && "
+        "pyprophet merge --subsample_ratio={params.subsample_ratio} --out $cache/$(basename {output.osw}) $cache/*.osw && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.osw}) --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.osw}) --level=ms1 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.osw}) --level=transition --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
+        "mv $cache/$(basename {output.osw}) {output.osw} && "
+        "mv $cache/$(basename {output.ms1ms2}) {output.ms1ms2} && "
+        "mv $cache/$(basename {output.ms1}) {output.ms1} && "
+        "mv $cache/$(basename {output.transition}) {output.transition} && "
+        "rm -rf $cache"
 
 rule pyprophet_apply:
     input:
         osw = rules.openswath.output.osw,
-        ms1ms2 = rules.pyprophet_model.output.ms1ms2
+        ms1ms2 = rules.pyprophet_model.output.ms1ms2,
+        ms1 = rules.pyprophet_model.output.ms1,
+        transition = rules.pyprophet_model.output.transition
     output:
         osw = "results/pyprophet/runspecific/{run}.osw",
         oswr = "results/pyprophet/runspecific/{run}.oswr"
     singularity:
         "develop.simg"
     shell:
-        "pyprophet score --in {input.osw} --out {output.osw} --classifier=XGBoost --apply_weights={input.ms1ms2} --level=ms1ms2 && "
-        "pyprophet score --in {input.osw} --out {output.osw} --classifier=XGBoost --apply_weights={input.ms1ms2} --level=ms1 && "
-        "pyprophet score --in {input.osw} --out {output.osw} --classifier=XGBoost --apply_weights={input.ms1ms2} --level=transition && "
-        "pyprophet ipf --no-ipf_ms2_scoring --in {output.osw} && "
-        "pyprophet reduce --in {output.osw} --out {output.oswr}"
+        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cp {input.osw} $cache && "
+        "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.ms1ms2} --level=ms1ms2 && "
+        "pyprophet score --in $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.ms1} --level=ms1 && "
+        "pyprophet score --in $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.transition} --level=transition && "
+        "pyprophet ipf --no-ipf_ms2_scoring --in $cache/$(basename {output.osw}) && "
+        "pyprophet reduce --in $cache/$(basename {output.osw}) --out $cache/$(basename {output.oswr}) && "
+        "mv $cache/$(basename {output.osw}) {output.osw} && "
+        "mv $cache/$(basename {output.oswr}) {output.oswr} && "
+        "rm -rf $cache"
 
 rule pyprophet_global:
     input:
@@ -104,9 +132,14 @@ rule pyprophet_global:
     singularity:
         "develop.simg"
     shell:
-        "pyprophet merge --template {input.template} --out {output} {input.oswr} && "
-        "pyprophet peptide --context=global --in {output} && "
-        "pyprophet protein --context=global --in {output}"
+        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cp {input.template} $cache && "
+        "cp {input.oswr} $cache && "
+        "pyprophet merge --template $cache/$(basename {input.template}) --out $cache/$(basename {output}) $cache/*.oswr && "
+        "pyprophet peptide --context=global --in $cache/$(basename {output}) && "
+        "pyprophet protein --context=global --in $cache/$(basename {output}) && "
+        "mv $cache/$(basename {output}) {output} && "
+        "rm -rf $cache"
 
 rule pyprophet_backpropagate:
     input:
@@ -117,8 +150,12 @@ rule pyprophet_backpropagate:
     singularity:
         "develop.simg"
     shell:
-        "pyprophet backpropagate --apply_scores {input.model} --in {input.osw}  --out {output} && "
-        "pyprophet export --in {output}"
+        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cp {input.osw} $cache && "
+        "cp {input.model} $cache && "
+        "pyprophet backpropagate --apply_scores $cache/$(basename {input.model}) --in $cache/$(basename {input.osw})  --out $cache/$(basename {output}) && "
+        "mv $cache/$(basename {output}) {output} && "
+        "rm -rf $cache"
 
 rule tric_prepare:
     input:
@@ -128,7 +165,11 @@ rule tric_prepare:
     singularity:
         "develop.simg"
     shell:
-        "pyprophet export --in={input} && mv $(basename {output}) {output}"
+        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cp {input} $cache && "
+        "pyprophet export --in $cache/$(basename {input}) && "
+        "mv $cache/$(basename {output}) {output} && "
+        "rm -rf $cache"
 
 rule tric_feature_alignment:
     input:

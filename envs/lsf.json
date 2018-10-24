@@ -46,7 +46,7 @@
 
     "openswath" :
     {
-        "nCPUs"     : "4"
+        "nCPUs"     : "8"
     }
 }
 
