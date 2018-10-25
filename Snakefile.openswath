@@ -74,38 +74,58 @@ rule openswath:
         "mv $cache/$(basename {output.osw}) {output.osw} && "
         "rm -rf $cache"
 
-rule pyprophet_model:
+rule pyprophet_subsample:
     input:
         expand("results/openswath/{run}.osw", run=run_ids)
     params:
         subsample_ratio = lambda wildcards, input: round(1.0/len(input),3)
     output:
-        osw = "results/pyprophet/runspecific/subsampled.osw",
+        "results/pyprophet/runspecific/subsampled.osw",
+    singularity:
+        "develop.simg"
+    threads: 1
+    shell:
+        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cp {input} $cache && "
+        "pyprophet merge --subsample_ratio={params.subsample_ratio} --out $cache/$(basename {output}) $cache/*.osw && "
+        "mv $cache/$(basename {output}) {output} && "
+        "rm -rf $cache"
+
+rule pyprophet_learn:
+    input:
+        rules.pyprophet_subsample.output
+    params:
+        subsample_ratio = lambda wildcards, input: round(1.0/len(input),3)
+    output:
         ms1ms2 = "results/pyprophet/runspecific/subsampled_ms1ms2_model.bin",
+        ms1ms2_report = "results/pyprophet/runspecific/subsampled_ms1ms2_report.pdf",
         ms1 = "results/pyprophet/runspecific/subsampled_ms1_model.bin",
+        ms1_report = "results/pyprophet/runspecific/subsampled_ms1_report.pdf",
         transition = "results/pyprophet/runspecific/subsampled_transition_model.bin",
+        transition_report = "results/pyprophet/runspecific/subsampled_transition_report.pdf",
     singularity:
         "develop.simg"
     threads: 4
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input} $cache && "
-        "pyprophet merge --subsample_ratio={params.subsample_ratio} --out $cache/$(basename {output.osw}) $cache/*.osw && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.osw}) --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.osw}) --level=ms1 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.osw}) --level=transition --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
-        "mv $cache/$(basename {output.osw}) {output.osw} && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=transition --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
         "mv $cache/$(basename {output.ms1ms2}) {output.ms1ms2} && "
+        "mv $cache/$(basename {output.ms1ms2_report}) {output.ms1ms2_report} && "
         "mv $cache/$(basename {output.ms1}) {output.ms1} && "
+        "mv $cache/$(basename {output.ms1_report}) {output.ms1_report} && "
         "mv $cache/$(basename {output.transition}) {output.transition} && "
+        "mv $cache/$(basename {output.transition_report}) {output.transition_report} && "
         "rm -rf $cache"
 
 rule pyprophet_apply:
     input:
         osw = rules.openswath.output.osw,
-        ms1ms2 = rules.pyprophet_model.output.ms1ms2,
-        ms1 = rules.pyprophet_model.output.ms1,
-        transition = rules.pyprophet_model.output.transition
+        ms1ms2 = rules.pyprophet_learn.output.ms1ms2,
+        ms1 = rules.pyprophet_learn.output.ms1,
+        transition = rules.pyprophet_learn.output.transition
     output:
         osw = "results/pyprophet/runspecific/{run}.osw",
         oswr = "results/pyprophet/runspecific/{run}.oswr"
@@ -115,17 +135,18 @@ rule pyprophet_apply:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input.osw} $cache && "
         "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.ms1ms2} --level=ms1ms2 && "
-        "pyprophet score --in $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.ms1} --level=ms1 && "
+        "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.ms1} --level=ms1 && "
         "pyprophet score --in $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.transition} --level=transition && "
-        "pyprophet ipf --no-ipf_ms2_scoring --in $cache/$(basename {output.osw}) && "
+        "pyprophet ipf --no-ipf_ms1_scoring --no-ipf_ms2_scoring --in $cache/$(basename {output.osw}) && "
         "pyprophet reduce --in $cache/$(basename {output.osw}) --out $cache/$(basename {output.oswr}) && "
         "mv $cache/$(basename {output.osw}) {output.osw} && "
         "mv $cache/$(basename {output.oswr}) {output.oswr} && "
+        "mv $cache/*.pdf results/pyprophet/runspecific/ && "
         "rm -rf $cache"
 
 rule pyprophet_global:
     input:
-        template = rules.pyprophet_model.output.osw,
+        template = rules.pyprophet_subsample.output,
         oswr = expand("results/pyprophet/runspecific/{run}.oswr", run=run_ids)
     output:
         "results/pyprophet/global/model.oswr"
@@ -139,6 +160,7 @@ rule pyprophet_global:
         "pyprophet peptide --context=global --in $cache/$(basename {output}) && "
         "pyprophet protein --context=global --in $cache/$(basename {output}) && "
         "mv $cache/$(basename {output}) {output} && "
+        "mv $cache/*.pdf results/pyprophet/global/ && "
         "rm -rf $cache"
 
 rule pyprophet_backpropagate:
