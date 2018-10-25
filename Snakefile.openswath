@@ -110,7 +110,7 @@ rule pyprophet_learn:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input} $cache && "
         "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1 --ss_initial_fdr=0.1 --ss_iteration_fdr=0.05 --pi0_lambda 0.05 0.2 0.05 --threads={threads} && "
         "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=transition --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
         "mv $cache/$(basename {output.ms1ms2}) {output.ms1ms2} && "
         "mv $cache/$(basename {output.ms1ms2_report}) {output.ms1ms2_report} && "
