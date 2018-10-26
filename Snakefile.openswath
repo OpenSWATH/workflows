@@ -183,19 +183,18 @@ rule tric_prepare:
     input:
         rules.pyprophet_backpropagate.output
     output:
-        "results/tric/{run}.mzXML.tsv"
+        "results/tric/{run}.tsv"
     singularity:
         "develop.simg"
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input} $cache && "
-        "pyprophet export --in $cache/$(basename {input}) && "
-        "mv $cache/$(basename {output}) {output} && "
+        "pyprophet export --in $cache/$(basename {input}) --out {output} --format=legacy_merged && "
         "rm -rf $cache"
 
 rule tric_feature_alignment:
     input:
-        expand("results/tric/{run}.mzXML.tsv", run=run_ids)
+        expand("results/tric/{run}.tsv", run=run_ids)
     output:
         long="results/tric/feature_alignment.tsv",
         matrix="results/tric/feature_alignment_matrix.tsv",
