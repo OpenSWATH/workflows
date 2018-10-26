@@ -134,10 +134,10 @@ rule pyprophet_apply:
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input.osw} $cache && "
-        "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.ms1ms2} --level=ms1ms2 && "
-        "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.ms1} --level=ms1 && "
+        "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --group_id=feature_id --classifier=XGBoost --apply_weights={input.ms1ms2} --level=ms1ms2 && "
+        "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --group_id=feature_id --classifier=XGBoost --apply_weights={input.ms1} --level=ms1 && "
         "pyprophet score --in $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.transition} --level=transition && "
-        "pyprophet ipf --no-ipf_ms1_scoring --no-ipf_ms2_scoring --in $cache/$(basename {output.osw}) && "
+        "pyprophet ipf --no-ipf_ms2_scoring --ipf_grouped_fdr --in $cache/$(basename {output.osw}) && "
         "pyprophet reduce --in $cache/$(basename {output.osw}) --out $cache/$(basename {output.oswr}) && "
         "mv $cache/$(basename {output.osw}) {output.osw} && "
         "mv $cache/$(basename {output.oswr}) {output.oswr} && "
@@ -189,7 +189,7 @@ rule tric_prepare:
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input} $cache && "
-        "pyprophet export --in $cache/$(basename {input}) --out {output} --format=legacy_merged && "
+        "pyprophet export --in $cache/$(basename {input}) --out {output} --format=legacy_merged --max_global_peptide_qvalue=1.0 --max_global_protein_qvalue=1.0 && "
         "rm -rf $cache"
 
 rule tric_feature_alignment:
@@ -202,5 +202,5 @@ rule tric_feature_alignment:
     singularity:
         "develop.simg"
     shell:
-        "feature_alignment.py --in {input} --out {output.long} --out_matrix {output.matrix} --method LocalMST --realign_method lowess_cython --max_rt_diff 60 --mst:useRTCorrection True --mst:Stdev_multiplier 3.0 --target_fdr 0.01 --max_fdr_quality 0.05"
+        "feature_alignment.py --in {input} --out {output.long} --out_matrix {output.matrix} --method LocalMST --realign_method lowess_cython --max_rt_diff 60 --mst:useRTCorrection True --mst:Stdev_multiplier 3.0 --fdr_cutoff 0.01 --max_fdr_quality 0.05"
 
