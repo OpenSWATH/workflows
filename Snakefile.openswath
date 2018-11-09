@@ -70,32 +70,46 @@ rule openswath:
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input.pqp} $cache/$(basename {input.pqp}) && cp {input.irt_linear} $cache/$(basename {input.irt_linear}) && cp {input.irt_nonlinear} $cache/$(basename {input.irt_nonlinear}) && "
-        "OpenSwathWorkflow -in {input.mzxml} -tr $cache/$(basename {input.pqp}) -tr_irt $cache/$(basename {input.irt_linear}) -tr_irt_nonlinear $cache/$(basename {input.irt_nonlinear}) -out_osw $cache/$(basename {output.osw}) -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory $cache -batchSize 1000 -ms1_isotopes 3 -enable_uis_scoring && "
+        "OpenSwathWorkflow -in {input.mzxml} -tr $cache/$(basename {input.pqp}) -tr_irt $cache/$(basename {input.irt_linear}) -tr_irt_nonlinear $cache/$(basename {input.irt_nonlinear}) -out_osw $cache/$(basename {output.osw}) -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory $cache -batchSize 1000 -ms1_isotopes 3 -enable_uis_scoring -Scoring:uis_threshold_sn -1 && "
         "mv $cache/$(basename {output.osw}) {output.osw} && "
         "rm -rf $cache"
 
 rule pyprophet_subsample:
     input:
-        expand("results/openswath/{run}.osw", run=run_ids)
+        rules.openswath.output.osw
     params:
-        subsample_ratio = lambda wildcards, input: round(1.0/len(input),3)
+        subsample_ratio = lambda wildcards, input: round(1.0/len(set(rules.openswath.output.osw)),3)
     output:
-        "results/pyprophet/runspecific/subsampled.osw",
+        "results/pyprophet/runspecific/{run}.osws"
     singularity:
         "develop.simg"
     threads: 1
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input} $cache && "
-        "pyprophet merge --subsample_ratio={params.subsample_ratio} --out $cache/$(basename {output}) $cache/*.osw && "
+        "pyprophet subsample --subsample_ratio={params.subsample_ratio} --in=$cache/$(basename {input}) --out=$cache/$(basename {output}) && "
+        "mv $cache/$(basename {output}) {output} && "
+        "rm -rf $cache"
+
+rule pyprophet_merge:
+    input:
+        template = rules.openswath.input.pqp,
+        osws = expand("results/pyprophet/runspecific/{run}.osws", run=run_ids)
+    output:
+        "results/pyprophet/runspecific/subsampled.osw"
+    singularity:
+        "develop.simg"
+    threads: 1
+    shell:
+        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cp {input} $cache && "
+        "pyprophet merge --template=$cache/$(basename {input.template}) --out=$cache/$(basename {output}) $cache/*.osws && "
         "mv $cache/$(basename {output}) {output} && "
         "rm -rf $cache"
 
 rule pyprophet_learn:
     input:
-        rules.pyprophet_subsample.output
-    params:
-        subsample_ratio = lambda wildcards, input: round(1.0/len(input),3)
+        rules.pyprophet_merge.output
     output:
         ms1ms2 = "results/pyprophet/runspecific/subsampled_ms1ms2_model.bin",
         ms1ms2_report = "results/pyprophet/runspecific/subsampled_ms1ms2_report.pdf",
@@ -109,9 +123,9 @@ rule pyprophet_learn:
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input} $cache && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1 --ss_initial_fdr=0.1 --ss_iteration_fdr=0.05 --pi0_lambda 0.05 0.2 0.05 --threads={threads} && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=transition --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads} && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1ms2 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --pi0_lambda 0.05 0.2 0.05 --threads={threads} && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=transition --ipf_min_transition_sn=-1 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
         "mv $cache/$(basename {output.ms1ms2}) {output.ms1ms2} && "
         "mv $cache/$(basename {output.ms1ms2_report}) {output.ms1ms2_report} && "
         "mv $cache/$(basename {output.ms1}) {output.ms1} && "
@@ -146,7 +160,7 @@ rule pyprophet_apply:
 
 rule pyprophet_global:
     input:
-        template = rules.pyprophet_subsample.output,
+        template = rules.openswath.input.pqp,
         oswr = expand("results/pyprophet/runspecific/{run}.oswr", run=run_ids)
     output:
         "results/pyprophet/global/model.oswr"
@@ -189,7 +203,7 @@ rule tric_prepare:
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input} $cache && "
-        "pyprophet export --in $cache/$(basename {input}) --out {output} --format=legacy_merged --max_global_peptide_qvalue=1.0 --max_global_protein_qvalue=1.0 && "
+        "pyprophet export --in $cache/$(basename {input}) --out {output} --format=legacy_merged --max_rs_peakgroup_qvalue=0.05 --ipf_max_peptidoform_pep=1.0 --max_global_peptide_qvalue=1.0 --max_global_protein_qvalue=1.0 && "
         "rm -rf $cache"
 
 rule tric_feature_alignment:
