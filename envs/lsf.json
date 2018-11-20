@@ -22,7 +22,7 @@
 
     "msfragger_search" :
     {
-        "memory"    : 16384,
+        "memory"    : 32768,
         "nCPUs"     : "4"
     },
 

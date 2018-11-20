@@ -40,7 +40,7 @@ rule msfragger_index:
         "develop.simg"
     threads: 4
     resources:
-        mem_mb=lambda wildcards, attempt: (attempt * 16384) - 2048
+        mem_mb=lambda wildcards, attempt: (attempt * 32768) - 2048
     shell:
         "java -Xmx{resources.mem_mb}M -jar MSFragger-20180316.jar params/fragger.params {input.mzxml}"
 
@@ -62,7 +62,7 @@ rule msfragger_search:
         "develop.simg"
     threads: 4
     resources:
-        mem_mb=lambda wildcards, attempt: (attempt * 16384) - 2048
+        mem_mb=lambda wildcards, attempt: (attempt * 32768) - 2048
     shell:
         "ln {input.mzxml} {output.cache} && "
         "java -Xmx{resources.mem_mb}M -jar MSFragger-20180316.jar {params.fragger} {output.cache} && "
