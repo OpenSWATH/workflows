@@ -70,7 +70,7 @@ rule openswath:
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input.pqp} $cache/$(basename {input.pqp}) && cp {input.irt_linear} $cache/$(basename {input.irt_linear}) && cp {input.irt_nonlinear} $cache/$(basename {input.irt_nonlinear}) && "
-        "OpenSwathWorkflow -in {input.mzxml} -tr $cache/$(basename {input.pqp}) -tr_irt $cache/$(basename {input.irt_linear}) -tr_irt_nonlinear $cache/$(basename {input.irt_nonlinear}) -out_osw $cache/$(basename {output.osw}) -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory $cache -batchSize 1000 -ms1_isotopes 3 -enable_uis_scoring -Scoring:uis_threshold_sn -1 && "
+        "OpenSwathWorkflow -in {input.mzxml} -tr $cache/$(basename {input.pqp}) -tr_irt $cache/$(basename {input.irt_linear}) -tr_irt_nonlinear $cache/$(basename {input.irt_nonlinear}) -out_osw $cache/$(basename {output.osw}) -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory $cache -batchSize 1000 -ms1_isotopes 3 && " #-enable_uis_scoring -Scoring:uis_threshold_sn -1 && "
         "mv $cache/$(basename {output.osw}) {output.osw} && "
         "rm -rf $cache"
 
@@ -115,8 +115,8 @@ rule pyprophet_learn:
         ms1ms2_report = "results/pyprophet/runspecific/subsampled_ms1ms2_report.pdf",
         ms1 = "results/pyprophet/runspecific/subsampled_ms1_model.bin",
         ms1_report = "results/pyprophet/runspecific/subsampled_ms1_report.pdf",
-        transition = "results/pyprophet/runspecific/subsampled_transition_model.bin",
-        transition_report = "results/pyprophet/runspecific/subsampled_transition_report.pdf",
+        # transition = "results/pyprophet/runspecific/subsampled_transition_model.bin",
+        # transition_report = "results/pyprophet/runspecific/subsampled_transition_report.pdf",
     singularity:
         "develop.simg"
     threads: 4
@@ -125,13 +125,13 @@ rule pyprophet_learn:
         "cp {input} $cache && "
         "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1ms2 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
         "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1 --ss_initial_fdr=0.1 --ss_iteration_fdr=0.05 --pi0_lambda 0.05 0.2 0.05 --threads={threads} && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=transition --ipf_min_transition_sn=-1 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
+        # "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=transition --ipf_min_transition_sn=-1 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
         "mv $cache/$(basename {output.ms1ms2}) {output.ms1ms2} && "
         "mv $cache/$(basename {output.ms1ms2_report}) {output.ms1ms2_report} && "
         "mv $cache/$(basename {output.ms1}) {output.ms1} && "
         "mv $cache/$(basename {output.ms1_report}) {output.ms1_report} && "
-        "mv $cache/$(basename {output.transition}) {output.transition} && "
-        "mv $cache/$(basename {output.transition_report}) {output.transition_report} && "
+        # "mv $cache/$(basename {output.transition}) {output.transition} && "
+        # "mv $cache/$(basename {output.transition_report}) {output.transition_report} && "
         "rm -rf $cache"
 
 rule pyprophet_apply:
@@ -139,7 +139,7 @@ rule pyprophet_apply:
         osw = rules.openswath.output.osw,
         ms1ms2 = rules.pyprophet_learn.output.ms1ms2,
         ms1 = rules.pyprophet_learn.output.ms1,
-        transition = rules.pyprophet_learn.output.transition
+        # transition = rules.pyprophet_learn.output.transition
     output:
         osw = "results/pyprophet/runspecific/{run}.osw",
         oswr = "results/pyprophet/runspecific/{run}.oswr"
@@ -150,8 +150,8 @@ rule pyprophet_apply:
         "cp {input.osw} $cache && "
         "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --group_id=feature_id --classifier=XGBoost --apply_weights={input.ms1ms2} --level=ms1ms2 && "
         "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --group_id=feature_id --classifier=XGBoost --apply_weights={input.ms1} --level=ms1 && "
-        "pyprophet score --in $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.transition} --level=transition && "
-        "pyprophet ipf --no-ipf_ms2_scoring --ipf_grouped_fdr --in $cache/$(basename {output.osw}) && "
+        # "pyprophet score --in $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.transition} --level=transition && "
+        # "pyprophet ipf --no-ipf_ms2_scoring --ipf_grouped_fdr --in $cache/$(basename {output.osw}) && "
         "pyprophet reduce --in $cache/$(basename {output.osw}) --out $cache/$(basename {output.oswr}) && "
         "mv $cache/$(basename {output.osw}) {output.osw} && "
         "mv $cache/$(basename {output.oswr}) {output.oswr} && "

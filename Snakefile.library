@@ -121,8 +121,8 @@ rule global_target_pqp:
     singularity:
         "develop.simg"
     shell:
-        #"OpenSwathAssayGenerator -in {params.peaks} -out {output}"
-        "OpenSwathAssayGenerator -in {params.peaks} -out {output} -enable_ipf -unimod_file {params.unimod} -disable_identification_ms2_precursors -disable_identification_specific_losses"
+        "OpenSwathAssayGenerator -in {params.peaks} -out {output}"
+        #"OpenSwathAssayGenerator -in {params.peaks} -out {output} -enable_ipf -unimod_file {params.unimod} -disable_identification_ms2_precursors -disable_identification_specific_losses"
 
 rule global_combined_pqp:
     input:
