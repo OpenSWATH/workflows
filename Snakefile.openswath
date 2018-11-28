@@ -43,6 +43,7 @@ rule irt_nonlinear_filter_pqp:
 
 rule openswath:
     input:
+        pqp="data_library/library.pqp",
         irt_linear=rules.irt_filter_pqp.output,
         irt_nonlinear=rules.irt_nonlinear_filter_pqp.output,
         mzxml="data_dia/{run}.mzXML",
@@ -57,30 +58,52 @@ rule openswath:
         mem_mb=lambda wildcards, attempt: attempt * 8192
     shell:
         "mkdir -p {params.cache} && "
-        "OpenSwathWorkflow -in {input.mzxml} -tr data_library/library.pqp -tr_irt {input.irt_linear} -tr_irt_nonlinear {input.irt_nonlinear} -out_osw {output.osw} -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory {params.cache} -batchSize 1000 -ms1_isotopes 3 && " # -enable_uis_scoring
+        "OpenSwathWorkflow -in {input.mzxml} -tr {input.pqp} -tr_irt {input.irt_linear} -tr_irt_nonlinear {input.irt_nonlinear} -out_osw {output.osw} -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory {params.cache} -batchSize 1000 -ms1_isotopes 3 && " # -enable_uis_scoring
         "rm -rf {params.cache}"
 
-rule pyprophet_model:
+rule pyprophet_subsample:
     input:
-        expand("results/openswath/{run}.osw", run=run_ids)
+        rules.openswath.output.osw
     params:
-        subsample_ratio = lambda wildcards, input: round(1.0/len(input),3)
+        subsample_ratio = lambda wildcards, input: round(1.0/len(set(rules.openswath.output.osw)),3)
     output:
-        osw = "results/pyprophet/runspecific/subsampled.osw",
+        "results/pyprophet/runspecific/{run}.osws"
+    singularity:
+        "develop.simg"
+    threads: 1
+    shell:
+        "pyprophet subsample --subsample_ratio={params.subsample_ratio} --in=$cache/$(basename {input}) --out=$cache/$(basename {output}) && "
+
+rule pyprophet_merge:
+    input:
+        template = rules.openswath.input.pqp,
+        osws = expand("results/pyprophet/runspecific/{run}.osws", run=run_ids)
+    output:
+        "results/pyprophet/runspecific/subsampled.osw"
+    singularity:
+        "develop.simg"
+    threads: 1
+    shell:
+        "pyprophet merge --template={input.template} --out={output} $cache/*.osws"
+
+rule pyprophet_learn:
+    input:
+        rules.pyprophet_merge.output
+    output:
         ms1ms2 = "results/pyprophet/runspecific/subsampled_ms1ms2_model.bin",
+        ms1ms2_report = "results/pyprophet/runspecific/subsampled_ms1ms2_report.pdf"
     singularity:
         "develop.simg"
     threads: 4
     shell:
-        "pyprophet merge --subsample_ratio={params.subsample_ratio} --out {output.osw} {input} && "
-        "pyprophet score --classifier=XGBoost --in {output.osw} --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads}"
+        "pyprophet score --classifier=XGBoost --in {input} --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads}"
         # "pyprophet score --in {output} --level=ms1 && "
         # "pyprophet score --in {output} --level=transition"
 
 rule pyprophet_apply:
     input:
         osw = rules.openswath.output.osw,
-        ms1ms2 = rules.pyprophet_model.output.ms1ms2
+        ms1ms2 = rules.pyprophet_learn.output.ms1ms2
     output:
         osw = "results/pyprophet/runspecific/{run}.osw",
         oswr = "results/pyprophet/runspecific/{run}.oswr"
@@ -95,7 +118,7 @@ rule pyprophet_apply:
 
 rule pyprophet_global:
     input:
-        template = rules.pyprophet_model.output.osw,
+        template = rules.openswath.input.pqp,
         oswr = expand("results/pyprophet/runspecific/{run}.oswr", run=run_ids)
     output:
         "results/pyprophet/global/model.oswr"
