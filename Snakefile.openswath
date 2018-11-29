@@ -72,7 +72,7 @@ rule pyprophet_subsample:
         "develop.simg"
     threads: 1
     shell:
-        "pyprophet subsample --subsample_ratio={params.subsample_ratio} --in=$cache/$(basename {input}) --out=$cache/$(basename {output}) && "
+        "pyprophet subsample --subsample_ratio={params.subsample_ratio} --in={input} --out={output}"
 
 rule pyprophet_merge:
     input:
@@ -84,7 +84,7 @@ rule pyprophet_merge:
         "develop.simg"
     threads: 1
     shell:
-        "pyprophet merge --template={input.template} --out={output} $cache/*.osws"
+        "pyprophet merge --template={input.template} --out={output} {input.osws}"
 
 rule pyprophet_learn:
     input:
