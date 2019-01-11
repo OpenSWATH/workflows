@@ -96,7 +96,7 @@ rule pyprophet_learn:
         "develop.simg"
     threads: 4
     shell:
-        "pyprophet score --classifier=XGBoost --in {input} --{output.model} --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads}"
+        "pyprophet score --classifier=XGBoost --in {input} --out {output.model} --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads}"
         # "pyprophet score --in {output.model} --level=ms1 && "
         # "pyprophet score --in {output.model} --level=transition"
 
