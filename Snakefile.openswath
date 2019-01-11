@@ -91,12 +91,12 @@ rule pyprophet_learn:
         rules.pyprophet_merge.output
     output:
         model = "results/pyprophet/runspecific/model.osw",
-        ms1ms2_report = "results/pyprophet/runspecific/subsampled_ms1ms2_report.pdf"
+        ms1ms2_report = "results/pyprophet/runspecific/model_ms1ms2_report.pdf"
     singularity:
         "develop.simg"
     threads: 4
     shell:
-        "pyprophet score --classifier=XGBoost --in {input} --out {output.model} --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads}"
+        "pyprophet score --classifier=XGBoost --in {input} --out {output.model} --level=ms1ms2 --pi0_lambda 0.05 0.5 0.05 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads}"
         # "pyprophet score --in {output.model} --level=ms1 && "
         # "pyprophet score --in {output.model} --level=transition"
 
