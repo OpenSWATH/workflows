@@ -111,35 +111,29 @@ rule pyprophet_learn:
     input:
         rules.pyprophet_merge.output
     output:
-        ms1ms2 = "results/pyprophet/runspecific/subsampled_ms1ms2_model.bin",
-        ms1ms2_report = "results/pyprophet/runspecific/subsampled_ms1ms2_report.pdf",
-        ms1 = "results/pyprophet/runspecific/subsampled_ms1_model.bin",
-        ms1_report = "results/pyprophet/runspecific/subsampled_ms1_report.pdf",
-        # transition = "results/pyprophet/runspecific/subsampled_transition_model.bin",
-        # transition_report = "results/pyprophet/runspecific/subsampled_transition_report.pdf",
+        model = "results/pyprophet/runspecific/model.osw",
+        ms1ms2_report = "results/pyprophet/runspecific/model_ms1ms2_report.pdf",
+        ms1_report = "results/pyprophet/runspecific/model_ms1_report.pdf",
+        # transition_report = "results/pyprophet/runspecific/model_transition_report.pdf",
     singularity:
         "develop.simg"
     threads: 4
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
-        "cp {input} $cache && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1ms2 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=ms1 --ss_initial_fdr=0.1 --ss_iteration_fdr=0.05 --pi0_lambda 0.05 0.2 0.05 --threads={threads} && "
-        # "pyprophet score --classifier=XGBoost --in $cache/$(basename {input}) --level=transition --ipf_min_transition_sn=-1 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
-        "mv $cache/$(basename {output.ms1ms2}) {output.ms1ms2} && "
+        "cp {input} $cache/$(basename {output.model}) && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.model}) --level=ms1ms2 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.model}) --level=ms1 --ss_initial_fdr=0.1 --ss_iteration_fdr=0.05 --pi0_lambda 0.05 0.2 0.05 --threads={threads} && "
+        # "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.model}) --level=transition --ipf_min_transition_sn=-1 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
+        "mv $cache/$(basename {output.model}) {output.model} && "
         "mv $cache/$(basename {output.ms1ms2_report}) {output.ms1ms2_report} && "
-        "mv $cache/$(basename {output.ms1}) {output.ms1} && "
         "mv $cache/$(basename {output.ms1_report}) {output.ms1_report} && "
-        # "mv $cache/$(basename {output.transition}) {output.transition} && "
         # "mv $cache/$(basename {output.transition_report}) {output.transition_report} && "
         "rm -rf $cache"
 
 rule pyprophet_apply:
     input:
         osw = rules.openswath.output.osw,
-        ms1ms2 = rules.pyprophet_learn.output.ms1ms2,
-        ms1 = rules.pyprophet_learn.output.ms1,
-        # transition = rules.pyprophet_learn.output.transition
+        model = rules.pyprophet_learn.output.model,
     output:
         osw = "results/pyprophet/runspecific/{run}.osw",
         oswr = "results/pyprophet/runspecific/{run}.oswr"
@@ -148,9 +142,9 @@ rule pyprophet_apply:
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input.osw} $cache && "
-        "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --group_id=feature_id --classifier=XGBoost --apply_weights={input.ms1ms2} --level=ms1ms2 && "
-        "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --group_id=feature_id --classifier=XGBoost --apply_weights={input.ms1} --level=ms1 && "
-        # "pyprophet score --in $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.transition} --level=transition && "
+        "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --group_id=feature_id --classifier=XGBoost --apply_weights={input.model} --level=ms1ms2 && "
+        "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --group_id=feature_id --classifier=XGBoost --apply_weights={input.model} --level=ms1 && "
+        # "pyprophet score --in $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.model} --level=transition && "
         # "pyprophet ipf --no-ipf_ms2_scoring --ipf_grouped_fdr --in $cache/$(basename {output.osw}) && "
         "pyprophet reduce --in $cache/$(basename {output.osw}) --out $cache/$(basename {output.oswr}) && "
         "mv $cache/$(basename {output.osw}) {output.osw} && "
