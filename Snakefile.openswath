@@ -90,15 +90,15 @@ rule pyprophet_learn:
     input:
         rules.pyprophet_merge.output
     output:
-        model = "results/pyprophet/runspecific/subsampled.osw",
+        model = "results/pyprophet/runspecific/model.osw",
         ms1ms2_report = "results/pyprophet/runspecific/subsampled_ms1ms2_report.pdf"
     singularity:
         "develop.simg"
     threads: 4
     shell:
-        "pyprophet score --classifier=XGBoost --in {input} --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads}"
-        # "pyprophet score --in {output} --level=ms1 && "
-        # "pyprophet score --in {output} --level=transition"
+        "pyprophet score --classifier=XGBoost --in {input} --{output.model} --level=ms1ms2 --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001 --threads={threads}"
+        # "pyprophet score --in {output.model} --level=ms1 && "
+        # "pyprophet score --in {output.model} --level=transition"
 
 rule pyprophet_apply:
     input:
