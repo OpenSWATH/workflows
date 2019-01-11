@@ -90,7 +90,7 @@ rule pyprophet_learn:
     input:
         rules.pyprophet_merge.output
     output:
-        ms1ms2 = "results/pyprophet/runspecific/subsampled_ms1ms2_model.bin",
+        model = "results/pyprophet/runspecific/subsampled.osw",
         ms1ms2_report = "results/pyprophet/runspecific/subsampled_ms1ms2_report.pdf"
     singularity:
         "develop.simg"
@@ -103,14 +103,14 @@ rule pyprophet_learn:
 rule pyprophet_apply:
     input:
         osw = rules.openswath.output.osw,
-        ms1ms2 = rules.pyprophet_learn.output.ms1ms2
+        model = rules.pyprophet_learn.output.model
     output:
         osw = "results/pyprophet/runspecific/{run}.osw",
         oswr = "results/pyprophet/runspecific/{run}.oswr"
     singularity:
         "develop.simg"
     shell:
-        "pyprophet score --in {input.osw} --out {output.osw} --classifier=XGBoost --apply_weights={input.ms1ms2} --level=ms1ms2 && "
+        "pyprophet score --in {input.osw} --out {output.osw} --classifier=XGBoost --apply_weights={input.model} --level=ms1ms2 && "
         # "pyprophet score --in {output.osw} --apply_weights {input.model} --level=ms1 && "
         # "pyprophet score --in {output.osw} --apply_weights {input.model} --level=transition && "
         # "pyprophet ipf --no-ipf_ms1_scoring --in {output.osw} && "
