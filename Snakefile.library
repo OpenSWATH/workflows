@@ -75,13 +75,13 @@ rule pyprophet_learn:
         "results/library/pyprophet_learn_ms2_model.bin"
     params:
         merged = "results/library/pyprophet_learn.tsv",
-        subsample_factor = 10
+        subsample_factor = 1
     singularity:
         "develop.simg"
     threads: 4
     shell:
         "python3 scripts/pyprophet2subsample.py {params.merged} {params.subsample_factor} {input} && "
-        "pyprophet score --in {params.merged} --threads={threads} --classifier=XGBoost --ss_initial_fdr=0.01 --ss_iteration_fdr=0.001"
+        "pyprophet score --in {params.merged} --threads={threads} --classifier=XGBoost --ss_initial_fdr=0.05 --ss_iteration_fdr=0.001"
 
 rule pyprophet_score:
     input:
