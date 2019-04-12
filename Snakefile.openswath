@@ -11,7 +11,7 @@ rule run_target_pqp:
     output:
         "results/openswath/{run}.pqp"
     singularity:
-        "develop.simg"
+        "docker://hroest/openms-executables-nightly:latest"
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "OpenSwathAssayGenerator -in {input} -out $cache/$(basename {output}) && "
@@ -27,11 +27,11 @@ rule irt_filter_pqp:
     output:
         "results/openswath/irt_{run}.pqp"
     singularity:
-        "develop.simg"
+        "docker://grosenberger/easypqp:latest"
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input} $cache/$(basename {input}) && "
-        "Rscript scripts/hrirt.R $cache/$(basename {input}) $cache/$(basename {output}) {params.bins} {params.peptides} && "
+        "easypqp reduce --in=$cache/$(basename {input}) --out=$cache/$(basename {output}) --bins={params.bins} --peptides={params.peptides} && "
         "mv $cache/$(basename {output}) {output} && "
         "rm -rf $cache"
 
@@ -44,11 +44,11 @@ rule irt_nonlinear_filter_pqp:
     output:
         "results/openswath/irt_nonlinear_{run}.pqp"
     singularity:
-        "develop.simg"
+        "docker://grosenberger/easypqp:latest"
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input} $cache/$(basename {input}) && "
-        "Rscript scripts/hrirt.R $cache/$(basename {input}) $cache/$(basename {output}) {params.bins} {params.peptides} && "
+        "easypqp reduce --in=$cache/$(basename {input}) --out=$cache/$(basename {output}) --bins={params.bins} --peptides={params.peptides} && "
         "mv $cache/$(basename {output}) {output} && "
         "rm -rf $cache"
 
@@ -63,7 +63,7 @@ rule openswath:
     params:
         run="{run}"
     singularity:
-        "develop.simg"
+        "docker://hroest/openms-executables-nightly:latest"
     threads: 4
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
@@ -82,7 +82,7 @@ rule pyprophet_subsample:
     output:
         "results/pyprophet/runspecific/{run}.osws"
     singularity:
-        "develop.simg"
+        "docker://pyprophet/master:latest"
     threads: 1
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
@@ -98,7 +98,7 @@ rule pyprophet_merge:
     output:
         "results/pyprophet/runspecific/subsampled.osw"
     singularity:
-        "develop.simg"
+        "docker://pyprophet/master:latest"
     threads: 1
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
@@ -116,7 +116,7 @@ rule pyprophet_learn:
         ms1_report = "results/pyprophet/runspecific/model_ms1_report.pdf",
         transition_report = "results/pyprophet/runspecific/model_transition_report.pdf",
     singularity:
-        "develop.simg"
+        "docker://pyprophet/master:latest"
     threads: 4
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
@@ -138,7 +138,7 @@ rule pyprophet_apply:
         osw = "results/pyprophet/runspecific/{run}.osw",
         oswr = "results/pyprophet/runspecific/{run}.oswr"
     singularity:
-        "develop.simg"
+        "docker://pyprophet/master:latest"
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input.osw} $cache && "
@@ -159,7 +159,7 @@ rule pyprophet_global:
     output:
         "results/pyprophet/global/model.oswr"
     singularity:
-        "develop.simg"
+        "docker://pyprophet/master:latest"
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input.template} $cache && "
@@ -178,7 +178,7 @@ rule pyprophet_backpropagate:
     output:
         "results/pyprophet/integrated/{run}.osw"
     singularity:
-        "develop.simg"
+        "docker://pyprophet/master:latest"
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input.osw} $cache && "
@@ -193,7 +193,7 @@ rule tric_prepare:
     output:
         "results/tric/{run}.tsv"
     singularity:
-        "develop.simg"
+        "docker://pyprophet/master:latest"
     shell:
         "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
         "cp {input} $cache && "
@@ -208,7 +208,7 @@ rule tric_feature_alignment:
         matrix="results/tric/feature_alignment_matrix.tsv",
         check=temp(touch("tric_feature_alignment.done"))
     singularity:
-        "develop.simg"
+        "docker://grosenberger/msproteomicstools:latest"
     shell:
         "feature_alignment.py --in {input} --out {output.long} --out_matrix {output.matrix} --method LocalMST --realign_method lowess_cython --max_rt_diff 60 --mst:useRTCorrection True --mst:Stdev_multiplier 3.0 --fdr_cutoff 0.01 --max_fdr_quality 0.05"
 

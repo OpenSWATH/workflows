@@ -12,7 +12,7 @@ rule decoydb:
     output:
         "results/library/library.fasta"
     singularity:
-        "develop.simg"
+        "docker://hroest/openms-executables-nightly:latest"
     shell:
         "DecoyDatabase -in {input} -out {output}"
 
@@ -20,14 +20,21 @@ rule digestdb:
     input:
         rules.decoydb.output
     output:
-        "results/library/peptides.pkl"
-    params:
-        peptides = "results/library/peptides.fasta"
+        "results/library/peptides.fasta"
     singularity:
-        "develop.simg"
+        "docker://hroest/openms-executables-nightly:latest"
     shell:
-        "Digestor -in {input} -out {params.peptides} -missed_cleavages 1 -min_length 7 -max_length 50 -enzyme Trypsin && "
-        "python3 scripts/fasta2index.py {params.peptides} {output}"
+        "Digestor -in {input} -out {output} -missed_cleavages 1 -min_length 7 -max_length 50 -enzyme Trypsin"
+
+rule peptide_index:
+    input:
+        rules.digestdb.output
+    output:
+        "results/library/peptides.pkl"
+    singularity:
+        "docker://grosenberger/easypqp:latest"
+    shell:
+        "easypqp index --fasta {input} --pepidx {output}"
 
 rule msfragger_index:
     input:
@@ -36,61 +43,75 @@ rule msfragger_index:
     output:
         index = "results/library/library.fasta.1.pepindex",
         tmp = temp("params/msfragger.tsv")
+    params:
+        fragger = "params/fragger_closed.params"
     singularity:
-        "develop.simg"
+        "docker://grosenberger/msfragger:20190222"
     threads: 4
     resources:
         mem_mb=lambda wildcards, attempt: (attempt * 32768) - 2048
     shell:
-        "java -Xmx{resources.mem_mb}M -jar MSFragger-20180316.jar params/fragger.params {input.mzxml}"
+        "java -Xmx{resources.mem_mb}M -jar /MSFragger.jar {params.fragger} {input.mzxml}"
 
 rule msfragger_search:
     input:
         fasta = rules.decoydb.output,
-        peptides = rules.digestdb.output,
         index = rules.msfragger_index.output.index,
         mzxml = "data_dda/{run}.mzXML"
     output:
         cache = temp("results/library/{run}.mzXML"),
-        fragger = "results/library/{run}.tsv",
-        pyprophet = "results/library/{run}_pyprophet.tsv",
-        peakpkl = "results/library/{run}.peakpkl"
+        fragger = "results/library/{run}.tsv"
     params:
-        fragger = "params/fragger.params",
-        unimod = "params/unimod_phospho.xml"
+        fragger = "params/fragger_closed.params"
     singularity:
-        "develop.simg"
+        "docker://grosenberger/msfragger:20190222"
     threads: 4
     resources:
         mem_mb=lambda wildcards, attempt: (attempt * 32768) - 2048
     shell:
         "ln {input.mzxml} {output.cache} && "
-        "java -Xmx{resources.mem_mb}M -jar MSFragger-20180316.jar {params.fragger} {output.cache} && "
-        "python3 scripts/fragger2pyprophet.py {params.unimod} {output.fragger} {input.peptides} {output.pyprophet} {input.mzxml} {output.peakpkl}"
+        "java -Xmx{resources.mem_mb}M -jar /MSFragger.jar {params.fragger} {output.cache}"
+
+rule msfragger_convert:
+    input:
+        peptides = rules.peptide_index.output,
+        mzxml = "data_dda/{run}.mzXML",
+        fragger = rules.msfragger_search.output.fragger
+    output:
+        pyprophet = "results/library/{run}_pyprophet.tsv",
+        subsampled = "results/library/{run}_subsampled.tsv",
+        peakpkl = "results/library/{run}.peakpkl"
+    params:
+        unimod = "params/unimod_phospho.xml",
+	subsample_fraction = 1.0
+    singularity:
+        "docker://grosenberger/easypqp:latest"
+    shell:
+        "easypqp convert --unimod {params.unimod} --fragger {input.fragger} --pepidx {input.peptides} --psms {output.pyprophet} --subpsms {output.subsampled} --mzxml {input.mzxml} --peaks {output.peakpkl} --subsample_fraction {params.subsample_fraction}"
 
 rule pyprophet_learn:
     input:
-        expand("results/library/{run}_pyprophet.tsv", run=run_ids),
+        expand("results/library/{run}_subsampled.tsv", run=run_ids),
     output:
         "results/library/pyprophet_learn_ms2_model.bin"
     params:
         merged = "results/library/pyprophet_learn.tsv",
         subsample_factor = 1
     singularity:
-        "develop.simg"
+        "docker://pyprophet/master:latest"
     threads: 4
     shell:
-        "python3 scripts/pyprophet2subsample.py {params.merged} {params.subsample_factor} {input} && "
-        "pyprophet score --in {params.merged} --threads={threads} --classifier=XGBoost --ss_initial_fdr=0.05 --ss_iteration_fdr=0.001"
+        "awk 'BEGIN {{ FS=\"\t\"; OFS=\"\t\" }} FNR>1 || NR==1 {{print $0}}' {input} > {params.merged} && "
+        "pyprophet score --in {params.merged} --threads={threads} --classifier=XGBoost --xeval_num_iter=3 --ss_initial_fdr=0.1 --ss_iteration_fdr=0.05"
 
 rule pyprophet_score:
     input:
-        pyprophet =rules.msfragger_search.output.pyprophet,
+        pyprophet =rules.msfragger_convert.output.pyprophet,
         model = rules.pyprophet_learn.output
     output:
         "results/library/{run}_pyprophet_scored.tsv"
     singularity:
-        "develop.simg"
+        "docker://pyprophet/master:latest"
     shell:
         "pyprophet score --in {input.pyprophet} --classifier=XGBoost --apply_weights={input.model}"
 
@@ -102,13 +123,13 @@ rule easypqp:
         peptide_plot = "results/library/pyprophet_peptides.pdf",
         protein_plot = "results/library/pyprophet_protein.pdf",
     singularity:
-        "develop.simg"
+        "docker://grosenberger/easypqp:latest"
     params:
         psm_fdr_threshold = 0.01,
         peptide_fdr_threshold = 0.01,
         protein_fdr_threshold = 0.01
     shell:
-        "python3 scripts/easypqp.py {params.psm_fdr_threshold} {params.peptide_fdr_threshold} {params.protein_fdr_threshold} {output.peptide_plot} {output.protein_plot} {input.psms} {input.peakpkl}"
+        "easypqp library --psm_fdr_threshold={params.psm_fdr_threshold} --peptide_fdr_threshold={params.peptide_fdr_threshold} --protein_fdr_threshold={params.protein_fdr_threshold} --peptide_plot={output.peptide_plot} --protein_plot={output.protein_plot} {input.psms} {input.peakpkl}"
 
 rule global_target_pqp:
     input:
@@ -119,7 +140,7 @@ rule global_target_pqp:
     output:
         temp("results/library/{run}_global_pqp.tsv")
     singularity:
-        "develop.simg"
+        "docker://hroest/openms-executables-nightly:latest"
     shell:
         #"OpenSwathAssayGenerator -in {params.peaks} -out {output}"
         "OpenSwathAssayGenerator -in {params.peaks} -out {output} -enable_ipf -unimod_file {params.unimod} -disable_identification_ms2_precursors -disable_identification_specific_losses"
@@ -130,7 +151,7 @@ rule global_combined_pqp:
     output:
         temp("results/library/combined_global_pqp.tsv")
     shell:
-        "awk 'BEGIN {{ FS=\"\t\"; OFS=\"\t\" }} FNR>1 || NR==1 {{print $1,$2,$3,$4,$5,$6,$7,$8,$14,$16,$17,$18,$23,$24,$25,$26,$27}}' {input} > {output}"
+        "awk 'BEGIN {{ FS=\"\t\"; OFS=\"\t\" }} FNR>1 || NR==1 {{print $1,$2,$3,$4,$5,$6,$7,$8,$15,$18,$19,$20,$25,$26,$27,$28,$29}}' {input} > {output}"
 
 rule global_combined_decoy_pqp:
     input:
@@ -138,7 +159,7 @@ rule global_combined_decoy_pqp:
     output:
         "data_library/library.pqp"
     singularity:
-        "develop.simg"
+        "docker://hroest/openms-executables-nightly:latest"
     shell:
         "cache=${{TMPDIR-/tmp/}} && "
         "OpenSwathDecoyGenerator -in {input} -out $cache/library.pqp && mv $cache/library.pqp {output}"
