@@ -11,9 +11,9 @@ rule run_target_pqp:
     output:
         "results/openswath/{run}.pqp"
     singularity:
-        "docker://hroest/openms-executables-nightly:latest"
+        "docker://openswath/develop:latest"
     shell:
-        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cache=${{TMPDIR-/tmp/}}/$(cat /proc/sys/kernel/random/uuid)/ && mkdir -p $cache && "
         "OpenSwathAssayGenerator -in {input} -out $cache/$(basename {output}) && "
         "mv $cache/$(basename {output}) {output} && "
         "rm -rf $cache"
@@ -29,7 +29,7 @@ rule irt_filter_pqp:
     singularity:
         "docker://grosenberger/easypqp:latest"
     shell:
-        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cache=${{TMPDIR-/tmp/}}/$(cat /proc/sys/kernel/random/uuid)/ && mkdir -p $cache && "
         "cp {input} $cache/$(basename {input}) && "
         "easypqp reduce --in=$cache/$(basename {input}) --out=$cache/$(basename {output}) --bins={params.bins} --peptides={params.peptides} && "
         "mv $cache/$(basename {output}) {output} && "
@@ -46,7 +46,7 @@ rule irt_nonlinear_filter_pqp:
     singularity:
         "docker://grosenberger/easypqp:latest"
     shell:
-        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cache=${{TMPDIR-/tmp/}}/$(cat /proc/sys/kernel/random/uuid)/ && mkdir -p $cache && "
         "cp {input} $cache/$(basename {input}) && "
         "easypqp reduce --in=$cache/$(basename {input}) --out=$cache/$(basename {output}) --bins={params.bins} --peptides={params.peptides} && "
         "mv $cache/$(basename {output}) {output} && "
@@ -63,14 +63,14 @@ rule openswath:
     params:
         run="{run}"
     singularity:
-        "docker://hroest/openms-executables-nightly:latest"
+        "docker://openswath/develop:latest"
     threads: 4
     resources:
         mem_mb=lambda wildcards, attempt: attempt * 8192
     shell:
-        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
-        "cp {input.pqp} $cache/$(basename {input.pqp}) && cp {input.irt_linear} $cache/$(basename {input.irt_linear}) && cp {input.irt_nonlinear} $cache/$(basename {input.irt_nonlinear}) && "
-        "OpenSwathWorkflow -in {input.mzxml} -tr $cache/$(basename {input.pqp}) -tr_irt $cache/$(basename {input.irt_linear}) -tr_irt_nonlinear $cache/$(basename {input.irt_nonlinear}) -out_osw $cache/$(basename {output.osw}) -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -readOptions cache -tempDirectory $cache -batchSize 1000 -ms1_isotopes 3 -enable_uis_scoring -Scoring:uis_threshold_sn -1 && "
+        "cache=${{TMPDIR-/tmp/}}/$(cat /proc/sys/kernel/random/uuid)/ && mkdir -p $cache && "
+        "cp {input.pqp} $cache/$(basename {input.pqp}) && cp {input.irt_linear} $cache/$(basename {input.irt_linear}) && cp {input.irt_nonlinear} $cache/$(basename {input.irt_nonlinear}) && cp {input.mzxml} $cache/$(basename {input.mzxml}) && "
+        "OpenSwathWorkflow -in $cache/$(basename {input.mzxml}) -tr $cache/$(basename {input.pqp}) -tr_irt $cache/$(basename {input.irt_linear}) -tr_irt_nonlinear $cache/$(basename {input.irt_nonlinear}) -out_osw $cache/$(basename {output.osw}) -threads {threads} -min_upper_edge_dist 1 -mz_extraction_window 30 -mz_extraction_window_unit ppm -mz_extraction_window_ms1 20 -mz_extraction_window_ms1_unit ppm -mz_correction_function regression_delta_ppm -use_ms1_traces -irt_mz_extraction_window 50 -irt_mz_extraction_window_unit ppm -rt_extraction_window 600 -RTNormalization:estimateBestPeptides -RTNormalization:alignmentMethod lowess -RTNormalization:outlierMethod none -Scoring:stop_report_after_feature 5 -Scoring:TransitionGroupPicker:compute_peak_quality false -Scoring:Scores:use_ms1_mi -Scoring:Scores:use_mi_score -threads {threads} -batchSize 1000 -ms1_isotopes 3 -enable_uis_scoring -Scoring:uis_threshold_sn -1 && "
         "mv $cache/$(basename {output.osw}) {output.osw} && "
         "rm -rf $cache"
 
@@ -85,7 +85,7 @@ rule pyprophet_subsample:
         "docker://pyprophet/master:latest"
     threads: 1
     shell:
-        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cache=${{TMPDIR-/tmp/}}/$(cat /proc/sys/kernel/random/uuid)/ && mkdir -p $cache && "
         "cp {input} $cache && "
         "pyprophet subsample --subsample_ratio={params.subsample_ratio} --in=$cache/$(basename {input}) --out=$cache/$(basename {output}) && "
         "mv $cache/$(basename {output}) {output} && "
@@ -101,7 +101,7 @@ rule pyprophet_merge:
         "docker://pyprophet/master:latest"
     threads: 1
     shell:
-        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cache=${{TMPDIR-/tmp/}}/$(cat /proc/sys/kernel/random/uuid)/ && mkdir -p $cache && "
         "cp {input} $cache && "
         "pyprophet merge --template=$cache/$(basename {input.template}) --out=$cache/$(basename {output}) $cache/*.osws && "
         "mv $cache/$(basename {output}) {output} && "
@@ -113,20 +113,20 @@ rule pyprophet_learn:
     output:
         model = "results/pyprophet/runspecific/model.osw",
         ms1ms2_report = "results/pyprophet/runspecific/model_ms1ms2_report.pdf",
-        ms1_report = "results/pyprophet/runspecific/model_ms1_report.pdf",
+        #ms1_report = "results/pyprophet/runspecific/model_ms1_report.pdf",
         transition_report = "results/pyprophet/runspecific/model_transition_report.pdf",
     singularity:
         "docker://pyprophet/master:latest"
     threads: 4
     shell:
-        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cache=${{TMPDIR-/tmp/}}/$(cat /proc/sys/kernel/random/uuid)/ && mkdir -p $cache && "
         "cp {input} $cache/$(basename {output.model}) && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.model}) --level=ms1ms2 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.model}) --level=ms1 --ss_initial_fdr=0.1 --ss_iteration_fdr=0.05 --pi0_lambda 0.05 0.2 0.05 --threads={threads} && "
-        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.model}) --level=transition --ipf_min_transition_sn=-1 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.model}) --level=ms1ms2 --xeval_num_iter=3 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
+        #"pyprophet score --classifier=XGBoost --in $cache/$(basename {output.model}) --level=ms1 --xeval_num_iter=3 --ss_initial_fdr=0.3 --ss_iteration_fdr=0.1 --threads={threads} && "
+        "pyprophet score --classifier=XGBoost --in $cache/$(basename {output.model}) --level=transition --ipf_min_transition_sn=-1 --xeval_num_iter=3 --ss_initial_fdr=0.05 --ss_iteration_fdr=0.01 --threads={threads} && "
         "mv $cache/$(basename {output.model}) {output.model} && "
         "mv $cache/$(basename {output.ms1ms2_report}) {output.ms1ms2_report} && "
-        "mv $cache/$(basename {output.ms1_report}) {output.ms1_report} && "
+        #"mv $cache/$(basename {output.ms1_report}) {output.ms1_report} && "
         "mv $cache/$(basename {output.transition_report}) {output.transition_report} && "
         "rm -rf $cache"
 
@@ -140,12 +140,12 @@ rule pyprophet_apply:
     singularity:
         "docker://pyprophet/master:latest"
     shell:
-        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cache=${{TMPDIR-/tmp/}}/$(cat /proc/sys/kernel/random/uuid)/ && mkdir -p $cache && "
         "cp {input.osw} $cache && "
         "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --group_id=feature_id --classifier=XGBoost --apply_weights={input.model} --level=ms1ms2 && "
-        "pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --group_id=feature_id --classifier=XGBoost --apply_weights={input.model} --level=ms1 && "
+        #"pyprophet score --in $cache/$(basename {input.osw}) --out $cache/$(basename {output.osw}) --group_id=feature_id --classifier=XGBoost --apply_weights={input.model} --level=ms1 && "
         "pyprophet score --in $cache/$(basename {output.osw}) --classifier=XGBoost --apply_weights={input.model} --level=transition && "
-        "pyprophet ipf --no-ipf_ms2_scoring --ipf_grouped_fdr --in $cache/$(basename {output.osw}) && "
+        "pyprophet ipf --no-ipf_ms1_scoring --no-ipf_ms2_scoring --ipf_grouped_fdr --in $cache/$(basename {output.osw}) && "
         "pyprophet reduce --in $cache/$(basename {output.osw}) --out $cache/$(basename {output.oswr}) && "
         "mv $cache/$(basename {output.osw}) {output.osw} && "
         "mv $cache/$(basename {output.oswr}) {output.oswr} && "
@@ -161,7 +161,7 @@ rule pyprophet_global:
     singularity:
         "docker://pyprophet/master:latest"
     shell:
-        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cache=${{TMPDIR-/tmp/}}/$(cat /proc/sys/kernel/random/uuid)/ && mkdir -p $cache && "
         "cp {input.template} $cache && "
         "cp {input.oswr} $cache && "
         "pyprophet merge --template $cache/$(basename {input.template}) --out $cache/$(basename {output}) $cache/*.oswr && "
@@ -180,7 +180,7 @@ rule pyprophet_backpropagate:
     singularity:
         "docker://pyprophet/master:latest"
     shell:
-        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cache=${{TMPDIR-/tmp/}}/$(cat /proc/sys/kernel/random/uuid)/ && mkdir -p $cache && "
         "cp {input.osw} $cache && "
         "cp {input.model} $cache && "
         "pyprophet backpropagate --apply_scores $cache/$(basename {input.model}) --in $cache/$(basename {input.osw})  --out $cache/$(basename {output}) && "
@@ -195,7 +195,7 @@ rule tric_prepare:
     singularity:
         "docker://pyprophet/master:latest"
     shell:
-        "cache=${{TMPDIR-/tmp/}}/$(uuidgen)/ && mkdir -p $cache && "
+        "cache=${{TMPDIR-/tmp/}}/$(cat /proc/sys/kernel/random/uuid)/ && mkdir -p $cache && "
         "cp {input} $cache && "
         "pyprophet export --in $cache/$(basename {input}) --out {output} --format=legacy_merged --max_rs_peakgroup_qvalue=0.05 --ipf_max_peptidoform_pep=1.0 --max_global_peptide_qvalue=1.0 --max_global_protein_qvalue=1.0 && "
         "rm -rf $cache"

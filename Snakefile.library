@@ -12,7 +12,7 @@ rule decoydb:
     output:
         "results/library/library.fasta"
     singularity:
-        "docker://hroest/openms-executables-nightly:latest"
+        "docker://openswath/develop:latest"
     shell:
         "DecoyDatabase -in {input} -out {output}"
 
@@ -22,7 +22,7 @@ rule digestdb:
     output:
         "results/library/peptides.fasta"
     singularity:
-        "docker://hroest/openms-executables-nightly:latest"
+        "docker://openswath/develop:latest"
     shell:
         "Digestor -in {input} -out {output} -missed_cleavages 1 -min_length 7 -max_length 50 -enzyme Trypsin"
 
@@ -140,7 +140,7 @@ rule global_target_pqp:
     output:
         temp("results/library/{run}_global_pqp.tsv")
     singularity:
-        "docker://hroest/openms-executables-nightly:latest"
+        "docker://openswath/develop:latest"
     shell:
         #"OpenSwathAssayGenerator -in {params.peaks} -out {output}"
         "OpenSwathAssayGenerator -in {params.peaks} -out {output} -enable_ipf -unimod_file {params.unimod} -disable_identification_ms2_precursors -disable_identification_specific_losses"
@@ -159,7 +159,7 @@ rule global_combined_decoy_pqp:
     output:
         "data_library/library.pqp"
     singularity:
-        "docker://hroest/openms-executables-nightly:latest"
+        "docker://openswath/develop:latest"
     shell:
         "cache=${{TMPDIR-/tmp/}} && "
         "OpenSwathDecoyGenerator -in {input} -out $cache/library.pqp && mv $cache/library.pqp {output}"
